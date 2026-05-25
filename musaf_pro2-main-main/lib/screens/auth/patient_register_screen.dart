@@ -130,11 +130,14 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
       String enteredEmail = _emailController.text.trim();
       debugPrint("🔵 بدأ تسجيل المريض في Auth...");
 
-      var user = await _auth.registerUser(
-        enteredEmail,
-        _passController.text.trim(),
-        'patient',
-      );
+      // ✅ الاستدعاء الصحيح
+var user = await _auth.registerUser(
+  email: enteredEmail,
+  password: _passController.text.trim(),
+  displayName: _nameController.text.trim(), // تأكدي أن هذا هو اسم متغير حقل الاسم لديكِ
+  phoneNumber: _phoneController.text.trim(), // تأكدي أن هذا هو اسم متغير حقل الجوال لديكِ
+  role: 'patient', // تسجيل الحساب كمريض
+);
 
       if (user != null) {
         // توليد الكود العشوائي للمطابقة

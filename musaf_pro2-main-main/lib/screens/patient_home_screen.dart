@@ -6,11 +6,10 @@ import 'package:musaf_pro/widgets/custom_button.dart';
 import 'package:musaf_pro/screens/settings_screen.dart';
 import 'package:musaf_pro/screens/wound_screen.dart';
 
-
 // 🚀 استيرادات الصفحات الجديدة
 import 'package:musaf_pro/screens/patient_sos_page.dart';
 import 'package:musaf_pro/screens/educational_library_page.dart';
-// 🚀 استيراد صفحة الأدوية اليومية الجديدة إذا لم تكن تستخدم المسارات (Routes)
+// 🚀 استيراد صفحة الأدوية اليومية الجديدة
 import 'package:musaf_pro/screens/daily_medications_list_screen.dart';
 
 class PatientHomeScreen extends StatefulWidget {
@@ -30,7 +29,6 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
   final Color musafTeal = const Color(0xFF006D77);
 
   String _userName = '...';
-
   late Stream<int> _medsStream;
 
   @override
@@ -96,6 +94,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
         });
   }
 
+  // 🛡️ التعديل الجوهري: حماية الـ setState باستخدام if (mounted) لمنع الكراش
   Future<void> _fetchUserName() async {
     try {
       String? userId = FirebaseAuth.instance.currentUser?.uid;
@@ -107,17 +106,19 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
         if (userDoc.exists && userDoc.data() != null) {
           String fullName = userDoc.get('displayName') ?? '';
           if (fullName.isNotEmpty) {
-            setState(() {
-              _userName = fullName.split(' ')[0];
-            });
+            if (mounted) {
+              setState(() {
+                _userName = fullName.split(' ')[0];
+              });
+            }
           } else {
-            setState(() => _userName = 'بك');
+            if (mounted) setState(() => _userName = 'بك');
           }
         }
       }
     } catch (e) {
       debugPrint("Error fetching user name: $e");
-      setState(() => _userName = 'بك');
+      if (mounted) setState(() => _userName = 'بك');
     }
   }
 
@@ -318,7 +319,6 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-
                               // 🔴 Glow متحرك
                               boxShadow: [
                                 BoxShadow(
@@ -333,12 +333,10 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
                           ),
                         );
                       },
-
                       child: CustomButton(
                         text: 'طلب تدخل طارئ (SOS)',
                         isPrimary: true,
                         backgroundColor: musafRed,
-
                         onPressed: () {
                           Navigator.push(
                             context,
@@ -354,6 +352,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
               ),
 
               SizedBox(height: screenHeight * 0.015),
+              
               // --- 3. كارد المكتبة التعليمية ---
               Container(
                 width: double.infinity,
@@ -411,8 +410,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                const EducationalLibraryPage(),
+                            builder: (context) => const EducationalLibraryPage(),
                           ),
                         );
                       },
@@ -432,15 +430,15 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
         child: FloatingActionButton(
           onPressed: () {
             Navigator.push(
-        context,
-        MaterialPageRoute( 
-          builder: (context) => const HomePage(),// تأكدي أن اسم الكلاس في صفحتك wound_screen هو WoundScreen
-        ),
-      );
-    },
-    backgroundColor: musafRed,
-    shape: const CircleBorder(),
-    child: const Icon(Icons.camera_alt, color: Colors.white, size: 24),
+              context,
+              MaterialPageRoute( 
+                builder: (context) =>  HomePage(),
+              ),
+            );
+          },
+          backgroundColor: musafRed,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.camera_alt, color: Colors.white, size: 24),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -489,13 +487,8 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
                       Icons.medical_services_outlined,
                       'الأدوية',
                       1,
-                      // 🚀 تم تعديل هذا السطر ليذهب إلى صفحة الأدوية اليومية
                       onTap: () {
-                        // استخدام pushNamed إذا كنت أضفتها في main.dart
                         Navigator.pushNamed(context, '/daily_medications');
-
-                        // أو استخدام push مباشرة (أيهما تفضل)
-                        // Navigator.push(context, MaterialPageRoute(builder: (context) => const DailyMedicationsListScreen()));
                       },
                     ),
                     _buildNavItem(Icons.home, 'الرئيسية', 0, isActive: true),
@@ -540,5 +533,11 @@ class _PatientHomeScreenState extends State<PatientHomeScreen>
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _sosController.dispose(); 
+    super.dispose();
   }
 }

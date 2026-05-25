@@ -38,7 +38,7 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
         ),
         title: const Text(
           'تسجيل مرافق',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
         ),
       ),
       body: SingleChildScrollView(
@@ -61,7 +61,6 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
             _buildFieldLabel("البريد الإلكتروني", Icons.email_outlined),
             _buildCustomTextField(_emailController, "example@mail.com"),
 
-            // تم إخفاء حقول (إيميل المرافق) و (صلة القرابة) من هنا لأنها لا تخص المرافق
             const SizedBox(height: 15),
             _buildFieldLabel("كلمة المرور", Icons.lock_outline),
             _buildCustomTextField(_passController, "........", isPass: true),
@@ -76,12 +75,11 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
 
             const SizedBox(height: 40),
 
-            // 🚀 التعديل هنا: استخدام الزر المخصص الموحد مع الحفاظ على حالة التحميل
             _isLoading
                 ? CircularProgressIndicator(color: primaryRed)
                 : CustomButton(
                     text: 'إنشاء حساب مرافق',
-                    isPrimary: true, // زر أساسي أحمر
+                    isPrimary: true, 
                     backgroundColor: primaryRed,
                     onPressed: _handleCaregiverRegister,
                   ),
@@ -93,13 +91,16 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
   }
 
   void _handleCaregiverRegister() async {
-    if (_emailController.text.isEmpty || _passController.text.isEmpty) {
-      _showError('يرجى ملء البيانات الأساسية');
+    if (_nameController.text.trim().isEmpty || 
+        _phoneController.text.trim().isEmpty || 
+        _emailController.text.trim().isEmpty || 
+        _passController.text.trim().isEmpty) {
+      _showError('يرجى ملء جميع البيانات الأساسية ⚠️');
       return;
     }
 
     if (_passController.text != _confirmPassController.text) {
-      _showError('كلمات المرور غير متطابقة');
+      _showError('كلمات المرور غير متطابقة ⚠️');
       return;
     }
 
@@ -111,7 +112,7 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
 
       debugPrint("🔵 المرافق يحاول التسجيل... جاري فحص السيرفر");
 
-      // 🚀 1. درع الحماية والبحث الذكي: هل يوجد مريض أضاف هذا الإيميل؟
+      // 1. درع الحماية: هل يوجد مريض أضاف هذا الإيميل؟
       var patientQuery = await FirebaseFirestore.instance
           .collection('users')
           .where('caregiverEmail', isEqualTo: enteredEmail)
@@ -129,28 +130,24 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
         debugPrint("🔵 تم العثور على المريض! ID: $linkedPatientId");
       }
 
-      // 2. السماح بإنشاء الحساب
+      // 🚀 2. الإصلاح: تمرير القيم الحقيقية من الحقول (Controllers) إلى الدالة
       var user = await _auth.registerUser(
-        enteredEmail,
-        _passController.text.trim(),
-        'caregiver',
+        email: enteredEmail,
+        password: _passController.text.trim(),
+        displayName: _nameController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        role: 'caregiver',
       );
 
       if (user != null) {
-        Map<String, dynamic> userData = {
-          'uid': user.uid,
-          'displayName': _nameController.text.trim(),
-          'phoneNumber': _phoneController.text.trim(),
-          'role': 'caregiver',
-          'email': enteredEmail,
-          'linkedPatientId': linkedPatientId, // الربط الفوري
-          'createdAt': FieldValue.serverTimestamp(),
-        };
-
+        // 3. نقوم فقط بتحديث حقل الربط (linkedPatientId) لأن حساب المرافق تم إنشاؤه بالفعل في دالة registerUser
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
-            .set(userData);
+            .update({
+          'linkedPatientId': linkedPatientId, 
+        });
+        
         debugPrint("🔵 تم حفظ المرافق وربطه بنجاح!");
 
         if (mounted) Navigator.pushReplacementNamed(context, '/caregiver_home');
@@ -164,7 +161,7 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Cairo'))));
   }
 
   Widget _buildFieldLabel(String label, IconData icon) {
@@ -175,7 +172,7 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo'),
           ),
           const SizedBox(width: 8),
           Icon(icon, size: 18, color: Colors.grey[600]),
@@ -199,12 +196,13 @@ class _CaregiverRegisterScreenState extends State<CaregiverRegisterScreen> {
         controller: ctrl,
         obscureText: isPass,
         textAlign: TextAlign.right,
+        style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
         keyboardType: isNumber
             ? TextInputType.phone
             : TextInputType.emailAddress,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13, fontFamily: 'Cairo'),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(15),
         ),
