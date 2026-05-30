@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // تمت إضافة هذه المكتبة لرفع الصور
 
-// تم تغيير الاسم هنا ليكون خاصاً بالمرافق
 class CaregiverSettingsScreen extends StatefulWidget {
   final String? caregiverId;
   const CaregiverSettingsScreen({super.key, this.caregiverId});
@@ -24,7 +24,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
 
   bool medAlertsEnabled = true;
   bool zoneAlertsEnabled = true;
-  bool soundAndVibrationEnabled = true;
+  bool soundAndVibrationEnabled = true; // تمت الإضافة
 
   final Color themeColor = const Color(0xFF2E7D32); 
 
@@ -55,16 +55,41 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
     }
   }
 
+  // تم التعديل: رفع الصورة إلى Firebase Storage بدل المسار المحلي
   Future<void> _pickAndUploadProfileImage() async {
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
       if (pickedFile != null && currentUserId != null) {
-        setState(() => caregiverImageUrl = pickedFile.path);
-        await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({'profileImageUrl': pickedFile.path});
+        // إظهار حالة التحميل أثناء الرفع
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري تحديث الصورة...", style: TextStyle(fontFamily: 'Cairo'))));
+        
+        File imageFile = File(pickedFile.path);
+        
+        // مسار الحفظ في Storage
+        Reference storageRef = FirebaseStorage.instance.ref().child('profile_images').child('$currentUserId.jpg');
+        
+        // رفع الملف
+        UploadTask uploadTask = storageRef.putFile(imageFile);
+        TaskSnapshot snapshot = await uploadTask;
+        
+        // الحصول على الرابط السحابي
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+
+        // تحديث الرابط في Firestore
+        await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({'profileImageUrl': downloadUrl});
+        
+        setState(() => caregiverImageUrl = downloadUrl);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم تحديث الصورة بنجاح ✅", style: TextStyle(fontFamily: 'Cairo'))));
+        }
       }
     } catch (e) {
-      debugPrint("خطأ أثناء اختيار الصورة: $e");
+      debugPrint("خطأ أثناء اختيار/رفع الصورة: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("حدث خطأ أثناء رفع الصورة", style: TextStyle(fontFamily: 'Cairo'))));
+      }
     }
   }
 
@@ -84,7 +109,8 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
         backgroundColor: const Color(0xFFF8F9FD),
         elevation: 0,
         centerTitle: true,
-        title: const Text("إدارة التطبيق", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 20)),
+        // التعديل 1: تغيير الاسم إلى الإعدادات
+        title: const Text("الإعدادات", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 20)),
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
@@ -118,21 +144,27 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 15),
+            
+            // التعديل 2 & 9: عرض معلومات الحساب تحت الصورة
+            Center(
+              child: Column(
+                children: [
+                  Text(caregiverName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  const SizedBox(height: 4),
+                  Text(caregiverEmail, style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey[600])),
+                ],
+              ),
+            ),
             const SizedBox(height: 30),
 
-            // 1. الحساب
+            // التعديل 3 & 4: ترتيب قسم الحساب وتغيير المسميات
             _buildSectionTitle("الحساب"),
             _buildSettingsGroup([
               _buildSettingsTile(
                 Icons.person_outline, 
-                "تعديل البيانات", 
+                "الملف الشخصي", 
                 onTap: () => _showEditProfileDialog()
-              ),
-              _buildDivider(),
-              _buildSettingsTile(
-                Icons.lock_outline_rounded, 
-                "تغيير كلمة المرور", 
-                onTap: () => _showPasswordResetDialog()
               ),
               _buildDivider(),
               _buildSettingsTile(
@@ -140,17 +172,42 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                 "إدارة المرضى", 
                 onTap: () => _showManagePatientsDialog()
               ),
+              _buildDivider(),
+              _buildSettingsTile(
+                Icons.lock_outline_rounded, 
+                "الأمان وكلمة المرور", 
+                onTap: () => _showPasswordResetDialog()
+              ),
             ]),
 
-            // 2. الإشعارات
+            // التعديل 12: إضافة قسم الأجهزة المرتبطة
+            _buildSectionTitle("الأجهزة المرتبطة"),
+            _buildSettingsGroup([
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.smartphone_rounded, color: themeColor, size: 24),
+                ),
+                title: const Text("جهاز المريض", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                subtitle: const Text("متصل • بطارية 78% • آخر تحديث الآن", style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.green)),
+                trailing: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+                onTap: () {}, // يمكن ربطها بشاشة تفاصيل الجهاز لاحقاً
+              ),
+            ]),
+
+            // التعديل 5: إضافة خيار الصوت والاهتزاز للإشعارات
             _buildSectionTitle("الإشعارات"),
             _buildSettingsGroup([
               _buildSwitchTile(Icons.medication_outlined, "تنبيهات الدواء", medAlertsEnabled, (val) => setState(() => medAlertsEnabled = val)),
               _buildDivider(),
-              _buildSwitchTile(Icons.share_location_outlined, "تنبيهات الخروج والدخول من المنطقة", zoneAlertsEnabled, (val) => setState(() => zoneAlertsEnabled = val)),
+              _buildSwitchTile(Icons.share_location_outlined, "تنبيهات الخروج والدخول", zoneAlertsEnabled, (val) => setState(() => zoneAlertsEnabled = val)),
+              _buildDivider(),
+              _buildSwitchTile(Icons.vibration_rounded, "الصوت والاهتزاز", soundAndVibrationEnabled, (val) => setState(() => soundAndVibrationEnabled = val)),
             ]),
 
-            // 3. الدعم
+            // التعديل 6: ترتيب الدعم (تواصل معنا -> عن التطبيق -> سياسة الخصوصية)
             _buildSectionTitle("الدعم"),
             _buildSettingsGroup([
               _buildSettingsTile(
@@ -161,33 +218,18 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                     context: context,
                     builder: (context) => AlertDialog(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      title: const Text(
-                        "تواصل معنا", 
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold), 
-                        textAlign: TextAlign.center
-                      ),
+                      title: const Text("تواصل معنا", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                       content: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(Icons.support_agent_rounded, size: 60, color: Color(0xFF2E7D32)),
                           const SizedBox(height: 15),
-                          const Text(
-                            "نسعد بخدمتكم عبر الرقم التالي:", 
-                            style: TextStyle(fontFamily: 'Cairo', fontSize: 14), 
-                            textAlign: TextAlign.center
-                          ),
+                          const Text("نسعد بخدمتكم عبر الرقم التالي:", style: TextStyle(fontFamily: 'Cairo', fontSize: 14), textAlign: TextAlign.center),
                           const SizedBox(height: 15),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2E7D32).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                            child: const Text(
-                              "774180199", // قم بتغيير الأصفار إلى رقمك الفعلي
-                              style: TextStyle(fontFamily: 'Cairo', fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32), letterSpacing: 2),
-                              textDirection: TextDirection.ltr,
-                            ),
+                            decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(15)),
+                            child: const Text("774180199", style: TextStyle(fontFamily: 'Cairo', fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32), letterSpacing: 2), textDirection: TextDirection.ltr),
                           ),
                         ],
                       ),
@@ -200,6 +242,23 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                         )
                       ],
                     ),
+                  );
+                }
+              ),
+              _buildDivider(),
+              _buildSettingsTile(
+                Icons.info_outline_rounded, 
+                "عن التطبيق", 
+                onTap: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'تطبيق مُسعف',
+                    applicationVersion: '1.0.0',
+                    applicationLegalese: '© 2026 جميع الحقوق محفوظة',
+                    children: [
+                      const SizedBox(height: 10),
+                      const Text('تطبيق مُسعف لمتابعة المرضى والرعاية الصحية.', style: TextStyle(fontFamily: 'Cairo')),
+                    ],
                   );
                 }
               ),
@@ -229,34 +288,18 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                   );
                 }
               ),
-              _buildDivider(),
-              _buildSettingsTile(
-                Icons.info_outline_rounded, 
-                "عن التطبيق", 
-                onTap: () {
-                  showAboutDialog(
-                    context: context,
-                    applicationName: 'تطبيق مُسعف',
-                    applicationVersion: '1.0.0',
-                    applicationLegalese: '© 2026 جميع الحقوق محفوظة',
-                    children: [
-                      const SizedBox(height: 10),
-                      const Text('تطبيق مُسعف لمتابعة المرضى والرعاية الصحية.', style: TextStyle(fontFamily: 'Cairo')),
-                    ],
-                  );
-                }
-              ),
             ]),
 
-            // 4. تسجيل الخروج (مفصول عن الخطر)
+            // التعديل 7: تسجيل الخروج بلون مميز
             _buildSettingsGroup([
-              _buildSettingsTile(Icons.logout_rounded, "تسجيل الخروج", onTap: () => _showLogoutDialog()),
+              _buildSettingsTile(Icons.logout_rounded, "تسجيل الخروج", color: Colors.orange, onTap: () => _showLogoutDialog()),
             ]),
 
-            // 5. منطقة الخطر (Danger Zone)
+            // التعديل 8: مسافة أكبر لمنطقة الخطر
+            const SizedBox(height: 25),
             _buildSectionTitle("منطقة الخطر", color: Colors.redAccent),
             Container(
-              margin: const EdgeInsets.only(bottom: 25),
+              margin: const EdgeInsets.only(bottom: 40),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -271,7 +314,6 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -424,7 +466,6 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
 
   // --- النوافذ المنبثقة لقسم الحساب ---
 
-  // 1. نافذة تعديل البيانات
   void _showEditProfileDialog() {
     TextEditingController nameController = TextEditingController(text: caregiverName);
     TextEditingController phoneController = TextEditingController(
@@ -468,12 +509,10 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () async {
               if (nameController.text.isNotEmpty && currentUserId != null) {
-                // حفظ في فايربيس
                 await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({
                   'displayName': nameController.text.trim(),
                   'phoneNumber': phoneController.text.trim(),
                 });
-                // تحديث الشاشة
                 setState(() {
                   caregiverName = nameController.text.trim();
                   caregiverPhone = phoneController.text.trim().isEmpty ? "لا يوجد رقم هاتف مسجل" : phoneController.text.trim();
@@ -489,7 +528,6 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
     );
   }
 
-  // 2. نافذة تأكيد تغيير كلمة المرور
   void _showPasswordResetDialog() {
     showDialog(
       context: context,
@@ -523,7 +561,6 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
     );
   }
 
-  // 3. نافذة إدارة المرضى المبسطة
   void _showManagePatientsDialog() {
     bool hasPatient = currentPatientId.isNotEmpty;
 

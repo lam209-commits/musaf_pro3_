@@ -178,7 +178,7 @@ Widget _buildMainBody(ImageProvider? profileImage, Color activeColor, bool conne
       children: [
         // 1. المحتوى القابل للتمرير أصبح في الأسفل ليسمح للأزرار العلوية بالعمل
         SingleChildScrollView(
-padding: EdgeInsets.only(top: hasSafeZones ? 370 : 20, left: 20, right: 20, bottom: 20),          child: Column(
+padding: EdgeInsets.only(top: hasSafeZones ? 370 : 100, left: 20, right: 20, bottom: 20),          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!hasSafeZones) _buildNoSafeZonesCard(context, activeColor), 
@@ -389,7 +389,7 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
           ),
           const SizedBox(height: 10),
           Text(
-            "أضف منطقة أمان للمريض ($linkedPatientName) للبدء في تتبع الموقع وتلقي التنبيهات الجغرافية.", 
+            "أضف منطقة أمان للتابع ($linkedPatientName) للبدء في تتبع الموقع وتلقي التنبيهات الجغرافية.", 
             style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey[700], height: 1.4)
           ),
           const SizedBox(height: 15),
@@ -432,23 +432,43 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
     );
   }
 
-  Widget _buildEmptyState() {
+ Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.healing_rounded, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          const Text(
-            "لم يتم ربط أي مريض بحسابك حتى الآن.", 
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            "يرجى الطلب من المريض إضافتك عبر كود الاقتران", 
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.link_off_rounded, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            const Text(
+              "لم يتم ربط أي تابع بحسابك!", 
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "لا يمكنك استخدام لوحة التحكم وتتبع الحالة قبل إدخال كود الربط الخاص بالتابع.", 
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey, height: 1.5)
+            ),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                // تأكدي من أن '/pairing' هو المسار الصحيح لشاشة إدخال الكود في ملف routes
+                onPressed: () => Navigator.pushNamed(context, '/pairing'), 
+                icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
+                label: const Text("إدخال كود الربط الآن", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

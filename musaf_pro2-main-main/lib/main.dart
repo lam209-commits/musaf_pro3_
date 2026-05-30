@@ -86,6 +86,7 @@ class MyApp extends StatelessWidget {
         '/medications': (context) => const MedicationsScreen(),
         '/daily_medications': (context) => const DailyMedicationsListScreen(),
         '/patient_home': (context) => const PatientHomeScreen(),
+        '/home': (context) => const MainDashboardScreen(),
       },
       onGenerateRoute: (settings) {
         final String patientId = settings.arguments is String ? settings.arguments as String : "user_123";

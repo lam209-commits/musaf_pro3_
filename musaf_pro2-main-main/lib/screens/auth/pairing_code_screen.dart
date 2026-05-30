@@ -16,39 +16,54 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
   final TextEditingController _codeController = TextEditingController();
   bool _isLoading = false;
 
-  // دالة التحقق من الكود في قاعدة البيانات (محمية بالكامل ولم تُمس ✅)
+  // دالة التحقق من الكود في قاعدة البيانات والربط الحقيقي
   void _verifyCode() async {
     String enteredCode = _codeController.text.trim();
 
     if (enteredCode.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('يرجى إدخال الكود أولاً')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى إدخال الكود أولاً', style: TextStyle(fontFamily: 'Cairo'))));
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      String? userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId != null) {
-        // جلب الكود الصحيح من Firestore
-        var userDoc = await FirebaseFirestore.instance
+      String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId != null) {
+        
+        // 1. البحث في المستودع عن المستخدم (المريض) الذي يملك هذا الكود
+        var querySnapshot = await FirebaseFirestore.instance
             .collection('users')
-            .doc(userId)
+            .where('pairingCode', isEqualTo: enteredCode)
+            .limit(1)
             .get();
-        String correctCode = userDoc.data()?['pairingCode'] ?? "";
 
-        if (enteredCode == correctCode) {
+        if (querySnapshot.docs.isNotEmpty) {
           // ✅ الكود صحيح
-          if (mounted) Navigator.pushReplacementNamed(context, '/health_data');
+          String patientId = querySnapshot.docs.first.id;
+
+          // 2. تحديث الحساب وربط الـ ID
+          await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({
+            'linkedPatientId': patientId,
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('تم الربط بنجاح! جاري تحويلك...', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              backgroundColor: Colors.green,
+            ));
+            
+            // 🚀 التوجيه إلى صفحة المريض
+            // تأكدي من استبدال '/home' باسم المسار الصحيح لصفحة المريض (مثلاً '/patient_dashboard' أو '/health_data')
+            Navigator.pushReplacementNamed(context, '/home'); 
+          }
         } else {
-          // ❌ الكود خطأ
+          // ❌ الكود خطأ أو غير موجود
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('❌ الكود غير صحيح، يرجى التأكد من مرافقك'),
-                backgroundColor: Color(0xFFC62828), // تنبيه باللون الأحمر
+                content: Text('❌ الكود غير صحيح أو منتهي الصلاحية', style: TextStyle(fontFamily: 'Cairo')),
+                backgroundColor: Color(0xFFC62828),
               ),
             );
           }
@@ -75,8 +90,8 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'خطوة 2: ربط المرافق',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          'خطوة 2: إتمام الربط',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
         ),
         centerTitle: true,
       ),
@@ -91,13 +106,13 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
 
             const Text(
               "أدخل كود الربط",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
             ),
             const SizedBox(height: 15),
             const Text(
-              "يرجى إدخال الكود المكون من 4 أرقام الذي استلمه مرافقك الآن على بريده الإلكتروني.",
+              "يرجى إدخال الكود المكون من 4 أرقام لإتمام عملية الربط بشكل آمن.",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
+              style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5, fontFamily: 'Cairo'),
             ),
 
             const SizedBox(height: 50),

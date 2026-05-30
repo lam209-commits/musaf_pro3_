@@ -38,7 +38,7 @@ class FamilyAlertsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locProvider = Provider.of<LocationProvider>(context, listen: false);
-    // 👈 جلب اللون البنفسجي الأساسي من ثيم التطبيق المركزي مباشرة (Clean Code Standard)
+    // جلب اللون الأساسي من ثيم التطبيق
     final themePrimaryColor = Theme.of(context).primaryColor;
 
     return Scaffold(
@@ -122,34 +122,66 @@ class FamilyAlertsScreen extends StatelessWidget {
             color: isRead ? Colors.black54 : Colors.black87,
           ),
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            alert['time_string'] ?? '',
-            style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'Cairo'),
-          ),
+        // تم التعديل حسب ملاحظتك لعرض التاريخ والوقت
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              // تم التغيير إلى time_string بناءً على الكود في ZoneRepository الذي أرسلته سابقاً
+              // إذا كنت تستخدم date_time_string في قاعدة البيانات، استبدلها هنا
+              alert['time_string'] ?? '', 
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ],
         ),
         onTap: () => provider.markAsRead(patientId, alert['id']),
       ),
     );
   }
 
-  // --- تمرير الـ primaryColor المستدعى من الثيم ديناميكياً للدوال المساعدة ---
-
+  // تم التعديل باستخدام Switch Case
   Color _getAlertColor(String? type, Color primaryColor) {
-    if (type == 'exit') return AppColors.error;          
-    if (type == 'battery') return Colors.orange;         
-    if (type == 'medication_delay') return primaryColor; // 👈 استخدام لون الثيم هنا
-    if (type == 'accident_fall') return Colors.red.shade900; 
-    return primaryColor;
+    switch (type) {
+      case 'exit':
+        return Colors.red;
+      case 'entry':
+        return Colors.green;
+      case 'battery':
+        return Colors.orange;
+      case 'signal_loss': // تم إضافة فقدان الإشارة
+        return const Color.fromARGB(255, 130, 126, 136);
+      case 'medication_delay':
+        return primaryColor;
+      case 'accident_fall':
+        return Colors.red.shade900;
+      default:
+        return primaryColor;
+    }
   }
 
+  // تم التعديل باستخدام Switch Case
   IconData _getAlertIcon(String? type, Color primaryColor) {
-    if (type == 'exit') return Icons.warning_rounded;
-    if (type == 'battery') return Icons.battery_alert_rounded;
-    if (type == 'medication_delay') return Icons.notification_important_rounded; 
-    if (type == 'accident_fall') return Icons.personal_injury_rounded;           
-    return Icons.notifications_active_rounded;
+    switch (type) {
+      case 'exit':
+        return Icons.warning_rounded;
+      case 'entry':
+        return Icons.home_rounded; // تعديل ليتوافق مع الدخول
+      case 'battery':
+        return Icons.battery_alert_rounded;
+      case 'signal_loss':
+        return Icons.portable_wifi_off_rounded;
+      case 'medication_delay':
+        return Icons.notification_important_rounded;
+      case 'accident_fall':
+        return Icons.personal_injury_rounded;
+      default:
+        return Icons.notifications_active_rounded;
+    }
   }
 
   Widget _buildDismissBackground() {

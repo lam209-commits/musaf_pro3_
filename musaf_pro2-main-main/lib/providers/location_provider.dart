@@ -142,7 +142,7 @@ class LocationProvider with ChangeNotifier {
             // الصياغة الجديدة لتنبيه فقدان الإشارة اللاسلكية
             await _zoneRepository.sendAlert(
               patientId, 
-              "📡 [تنبيه اتصال]: ($_patientName)تم فقدان الإشارة مع هاتف .\n📌 المنطقة الأخيرة: $lastKnownZone\n📍 العنوان الأخير المسجل: $lastLocationAddress"
+              "📡 تم فقدان الاتصال التابع $_patientName.\n📌 آخر منطقة: $lastKnownZone\n📍 آخر موقع معروف: $lastLocationAddress"
             );
             
             _lastSignalAlertTime = DateTime.now(); 
@@ -226,7 +226,7 @@ class LocationProvider with ChangeNotifier {
       
       if (_wasInSafeZone == false) {
         // الصياغة الجديدة لرسائل الأمان الفورية عند العودة للمنطقة الآمنة
-        await _zoneRepository.sendAlert(patientId, "✅ [إشعار أمان]: عاد المريض ($_patientName) بسلام إلى النطاق الآمن: (${activeZone.name}).");
+        await _zoneRepository.sendAlert(patientId, "✅ عاد $_patientName إلى المنطقة الآمنة (${activeZone.name}).");
       }
     } else {
       _status = "خارج النطاق! ";
@@ -237,7 +237,7 @@ class LocationProvider with ChangeNotifier {
         // الصياغة الهندسية الجديدة لتنبيهات الخروج الفورية من النطاق
         await _zoneRepository.sendAlert(
           patientId, 
-"🚨 [تنبيه طوارئ]: خرج $patientName من النطاق الآمن الآن!\nالعنوان الحالي: $locationAddress"        );
+          "🚨 خرج $_patientName من المنطقة الآمنة.\n📍 الموقع: $locationAddress"        );
         _lastOutsideZoneAlertTime = DateTime.now(); 
       }
     }
@@ -256,7 +256,7 @@ class LocationProvider with ChangeNotifier {
       // الصياغة الخاصة بالتذكير التتابعي المستمر
       _zoneRepository.sendAlert(
         patientId, 
-"⏳ [تذكير طوارئ]: لا يزال $patientName خارج النطاق الآمن.\nالعنوان المحدث: $locationAddress"      );
+        "⏳ لا يزال $_patientName خارج المنطقة الآمنة.\n📍 الموقع الحالي: $locationAddress"      );
       
       _lastOutsideZoneAlertTime = DateTime.now(); 
     }

@@ -100,24 +100,64 @@ class FirebaseZoneRepository implements ZoneRepository {
     }
   }
 
+  // 1- الدالة المضافة لتنسيق الوقت الذكي
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inMinutes < 1) {
+      return "الآن";
+    }
+
+    if (difference.inMinutes < 60) {
+      return "قبل ${difference.inMinutes} دقيقة";
+    }
+
+    if (difference.inHours < 24) {
+      return "قبل ${difference.inHours} ساعة";
+    }
+
+    if (difference.inDays == 1) {
+      return "أمس";
+    }
+
+    if (difference.inDays < 7) {
+      return "قبل ${difference.inDays} أيام";
+    }
+
+    return "${date.day}/${date.month}/${date.year}";
+  }
+
+  // 2- دالة sendAlert المحدثة
   @override
   Future<void> sendAlert(String patientId, String message) async {
     try {
-      // 🛠️ التعديل هنا: تحديد نوع التنبيه والعنوان ديناميكياً بدقة تامة لتلتقطه شاشة العائلة فوراً
       String title = 'تنبيه عام';
       String alertType = 'general';
 
       if (message.contains("خرج")) {
-        title = 'تنبيه خروج طوارئ ⚠️';
+        title = 'خروج من المنطقة الآمنة';
         alertType = 'exit';
-      } else if (message.contains("عاد")) {
-        title = 'تنبيه عودة للأمان ✅';
-        alertType = 'entry'; // تم تخصيص نوع مستقل ومميز لحالة الدخول والعودة للأمان
-      } else if (message.contains("بطارية")) {
-        title = 'تنبيه طاقة منخفضة 🔋';
+      } 
+      else if (message.contains("عاد")) {
+        title = 'عودة إلى المنطقة الآمنة';
+        alertType = 'entry';
+      } 
+      else if (message.contains("بطارية")) {
+        title = 'بطارية منخفضة';
         alertType = 'battery';
-      } else if (message.contains("دواء") || message.contains("موعد")) {
-        title = 'تأخر في أخذ الدواء 💊';
+      } 
+      else if (
+          message.contains("فقدان") ||
+          message.contains("الإشارة") ||
+          message.contains("الاتصال")) {
+        title = 'فقدان الاتصال';
+        alertType = 'signal_loss';
+      } 
+      else if (
+          message.contains("دواء") ||
+          message.contains("موعد")) {
+        title = 'تأخر في الدواء';
         alertType = 'medication_delay';
       }
 
@@ -130,32 +170,38 @@ class FirebaseZoneRepository implements ZoneRepository {
         'message': message,
         'timestamp': FieldValue.serverTimestamp(),
         'is_read': false,
-        'type': alertType, // رفع الـ type الصافي المستنتج هندسياً لقاعدة البيانات
+        'type': alertType,
       });
     } catch (e) {
       print("Error sending alert: $e");
     }
   }
 
+  // 3- دالة getPatientAlertsStream المحدثة لاستخدام التنسيق الزمني
   @override
-  Stream<List<Map<String, dynamic>>> getPatientAlertsStream(String patientId) {
+  Stream<List<Map<String, dynamic>>> getPatientAlertsStream(
+      String patientId) {
     return _firestore
         .collection('patients')
         .doc(patientId)
         .collection('alerts')
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              final timestamp = data['timestamp'] as Timestamp?;
-              return {
-                ...data,
-                'id': doc.id,
-                'time_string': timestamp != null 
-                    ? "${timestamp.toDate().hour}:${timestamp.toDate().minute.toString().padLeft(2, '0')}" 
-                    : "",
-              };
-            }).toList());
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+
+        final timestamp = data['timestamp'] as Timestamp?;
+
+        return {
+          ...data,
+          'id': doc.id,
+          'time_string': timestamp != null
+              ? _formatDate(timestamp.toDate())
+              : "الآن",
+        };
+      }).toList();
+    });
   }
 
   @override
