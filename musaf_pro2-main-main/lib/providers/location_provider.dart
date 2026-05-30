@@ -7,9 +7,12 @@ import 'package:geocoding/geocoding.dart';
 
 import '../../domain/entities/safe_zone.dart';
 import '../../domain/repositories/zone_repository.dart';
+enum TrackingState { initial, loading, tracking, error, connectionLost }
 
 class LocationProvider with ChangeNotifier {
   final ZoneRepository _zoneRepository;
+  TrackingState _trackingState = TrackingState.initial;
+  TrackingState get trackingState => _trackingState;
   
   LocationProvider(this._zoneRepository);
 
@@ -80,11 +83,16 @@ class LocationProvider with ChangeNotifier {
   }
 
   // 📝 دالة مساعدة ذكية لصياغة وتجهيز العناوين والمواقع الأخيرة بشكل مرتب ونظيف
-  Future<String> _getFormattedAddress(Position? pos) async {
+ Future<String> _getFormattedAddress(Position? pos) async {
     if (pos == null) return "الموقع الحالي غير متوفر";
+
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude)
-          .timeout(const Duration(seconds: 4), onTimeout: () => []);
+      // ✅ سطر واحد فقط لتعريف المتغير وجلب الإحداثيات
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        pos.latitude, 
+        pos.longitude,
+      ).timeout(const Duration(seconds: 4), onTimeout: () => <Placemark>[]);
+      
       
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
@@ -113,13 +121,23 @@ class LocationProvider with ChangeNotifier {
 
   // --- محرك التتبع الذكي المطور (Geofencing Engine) ---
   Future<void> startPatientTracking(String patientId) async {
-    if (!await _checkLocationPermissions()) return;
+if (!await _checkLocationPermissions()) { 
+  _trackingState = TrackingState.error; // 👈 إضافة: حالة خطأ بسبب الصلاحيات
+  notifyListeners();
+      return; 
+    }
+    if (_patientName == "التابع") {
+      await fetchPatientName(patientId);
+    }
 
     await _positionStream?.cancel();
     _signalTimer?.cancel();
+
+    
     
     _isTracking = true;
     _status = "جاري التحديد...";
+    _trackingState = TrackingState.loading; // 👈 إضافة: حالة التحميل وبدء التتبع
     _lastUpdateTime = DateTime.now();
     _lastSignalAlertTime = null; 
     _lastOutsideZoneAlertTime = null; 
@@ -130,7 +148,8 @@ class LocationProvider with ChangeNotifier {
         int minutesSinceLastUpdate = DateTime.now().difference(_lastUpdateTime!).inMinutes;
 
         if (minutesSinceLastUpdate >= 3) {
-          _status = "فقدان الاتصال بجهاز $_patientName! 📡";          
+          _status = "فقدان الاتصال بجهاز $_patientName! 📡";    
+          _trackingState = TrackingState.connectionLost; // 👈 إضافة: حالة فقدان الاتصال      
           notifyListeners();
 
           if (_lastSignalAlertTime == null || 
@@ -142,8 +161,7 @@ class LocationProvider with ChangeNotifier {
             // الصياغة الجديدة لتنبيه فقدان الإشارة اللاسلكية
             await _zoneRepository.sendAlert(
               patientId, 
-              "📡 تم فقدان الاتصال التابع $_patientName.\n📌 آخر منطقة: $lastKnownZone\n📍 آخر موقع معروف: $lastLocationAddress"
-            );
+"$_patientName 📡 تم فقدان الاتصال  \n📌 آخر منطقة $lastKnownZone\n اخر موقع \n 📍$lastLocationAddress   "            );
             
             _lastSignalAlertTime = DateTime.now(); 
           }
@@ -160,12 +178,19 @@ class LocationProvider with ChangeNotifier {
       (Position position) {
         _currentPosition = position;
         _lastUpdateTime = DateTime.now(); 
-        _lastSignalAlertTime = null;      
+        _lastSignalAlertTime = null;
+        
+        if (_trackingState != TrackingState.tracking) {
+          _trackingState = TrackingState.tracking; // 👈 إضافة: حالة التتبع النشط بنجاح
+          notifyListeners();
+        }
+        
         _processLocationUpdate(position, patientId);
       },
       onError: (error) {
         _status = "خطأ في المستشعر ⚠️";
-        _zoneRepository.sendAlert(patientId, "⚠️ [خطأ في النظام]: حدثت مشكلة في مستشعر الـ GPS الخاص بجهاز المريض: $error");
+        _trackingState = TrackingState.error; // 👈 إضافة: حالة الخطأ
+        _zoneRepository.sendAlert(patientId, "⚠️ [خطأ في النظام]: حدثت مشكلة في مستشعر الـ GPS الخاص بجهاز التابع: $error");
         notifyListeners();
       }
     );
@@ -176,6 +201,7 @@ class LocationProvider with ChangeNotifier {
     _signalTimer?.cancel();
     _isTracking = false;
     _status = "تم إيقاف التتبع"; 
+    _trackingState = TrackingState.initial; // 👈 إضافة: العودة للحالة الابتدائية
     _currentZoneId = null;
     _wasInSafeZone = null;
     _lastOutsideZoneAlertTime = null;
@@ -226,19 +252,20 @@ class LocationProvider with ChangeNotifier {
       
       if (_wasInSafeZone == false) {
         // الصياغة الجديدة لرسائل الأمان الفورية عند العودة للمنطقة الآمنة
-        await _zoneRepository.sendAlert(patientId, "✅ عاد $_patientName إلى المنطقة الآمنة (${activeZone.name}).");
+        await _zoneRepository.sendAlert(patientId, "✅ عاد $_patientName إلى المنطقة الآمنة (${activeZone.name})");
       }
     } else {
       _status = "خارج النطاق! ";
       
       if (_wasInSafeZone == true || _wasInSafeZone == null) {
         String locationAddress = await _getFormattedAddress(pos);
+        String leftZoneName = _getZoneNameById(_currentZoneId);
 
         // الصياغة الهندسية الجديدة لتنبيهات الخروج الفورية من النطاق
         await _zoneRepository.sendAlert(
           patientId, 
-          "🚨 خرج $_patientName من المنطقة الآمنة.\n📍 الموقع: $locationAddress"        );
-        _lastOutsideZoneAlertTime = DateTime.now(); 
+"🚨 خرج  $_patientName من النطاق الآمن ($leftZoneName).\n📍 الموقع: $locationAddress" );
+_lastOutsideZoneAlertTime = DateTime.now();
       }
     }
     
@@ -256,7 +283,7 @@ class LocationProvider with ChangeNotifier {
       // الصياغة الخاصة بالتذكير التتابعي المستمر
       _zoneRepository.sendAlert(
         patientId, 
-        "⏳ لا يزال $_patientName خارج المنطقة الآمنة.\n📍 الموقع الحالي: $locationAddress"      );
+        "⏳ لا يزال $_patientName خارج المنطقة الآمنة \n📍 الموقع الحالي: $locationAddress"      );
       
       _lastOutsideZoneAlertTime = DateTime.now(); 
     }
@@ -286,7 +313,7 @@ class LocationProvider with ChangeNotifier {
       if (_lastBatteryAlertTime == null || 
           DateTime.now().difference(_lastBatteryAlertTime!).inMinutes > 15) {
         // الصياغة المحدثة لتنبيه البطارية الحرجة
-        _zoneRepository.sendAlert(patientId, "🔋 [تحذير طاقة]: بطارية جهاز المريض ($_patientName) منخفضة جداً ووشكت على النفاد ($level%). يرجى شحن الهاتف فوراً لضمان استمرار التتبع.");
+        _zoneRepository.sendAlert(patientId, "🔋 [تحذير طاقة]: بطارية جهاز المريض ($_patientName) منخفضة جداً ووشكت على النفاد ($level%) يرجى شحن الهاتف فوراً لضمان استمرار التتبع");
         _lastBatteryAlertTime = DateTime.now();
       }
     }

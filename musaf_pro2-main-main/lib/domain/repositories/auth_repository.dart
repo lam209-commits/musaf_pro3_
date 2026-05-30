@@ -16,4 +16,11 @@ abstract class AuthRepository {
     required String caregiverName,
     required String pairingCode,
   });
+  Future<void> unlinkPatientLogic(String currentUserId, String patientId);
+  
+  // 2. حذف الحساب بأمان
+  Future<void> deleteUserAccountSecurely(String currentPassword);
+  
+  // 3. رفع الصورة
+  Future<void> uploadProfileImage(String currentUserId, String imagePath);
 }

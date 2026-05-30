@@ -43,6 +43,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // متغيرات التحكم في إظهار وإخفاء كلمة السر (العين)
   bool _isObscurePass = true;
   bool _isObscureConfirmPass = true;
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _passController.dispose();
+    _confirmPassController.dispose();
+    _caregiverEmailController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {

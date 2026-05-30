@@ -1,12 +1,13 @@
+import 'dart:async'; // 👈 ضروري للـ StreamSubscription
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // 👈 ضروري لرفع الصور
 import 'package:image_picker/image_picker.dart';
 
 import '../providers/location_provider.dart';
-import 'settings_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
   final String? caregiverId;
@@ -20,6 +21,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
+  // 👈 1. تعريف الـ Subscriptions لحل مشكلة تسريب الذاكرة
+  StreamSubscription<QuerySnapshot>? _alertsSubscription;
+  StreamSubscription<QuerySnapshot>? _zonesSubscription;
+
   String currentPatientId = ""; 
   String caregiverName = "المرافق";
   String linkedPatientName = "جاري التحميل..."; 
@@ -29,8 +34,6 @@ class _HomeScreenState extends State<HomeScreen> {
   
   bool hasSafeZones = true; 
   final Color backgroundLight = const Color(0xFFF8F9FD);
-
-  // تم حذف اللون البنفسجي الثابت من هنا ليتم حسابه ديناميكياً
 
   String get _firstName {
     if (caregiverName.trim().isEmpty) return "المرافق";
@@ -44,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initializeCaregiverData() async {
-    final uid = widget.caregiverId ?? FirebaseAuth.instance.currentUser?.uid;
+    final uid = widget.caregiverId ?? currentUserId;
     if (uid != null) {
       try {
         var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -62,17 +65,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 linkedPatientName = patientDoc.data()?['displayName'] ?? "التابع";
               });
             } else {
-              setState(() => linkedPatientName = "لم يتم العثور على بيانات التابع");
+              if (mounted) setState(() => linkedPatientName = "لم يتم العثور على بيانات التابع");
             }
 
             final pro = context.read<LocationProvider>();
-            await pro.loadSafeZones(currentPatientId);
+            // 👈 7. حماية إضافية قبل التحميل
+            if (currentPatientId.isNotEmpty) {
+              await pro.loadSafeZones(currentPatientId);
+            }
             
-            FirebaseFirestore.instance.collection('patients').doc(currentPatientId).collection('alerts').where('is_read', isEqualTo: false).snapshots().listen((snapshot) {
+            // 👈 1. حفظ الـ listener في المتغير
+            _alertsSubscription = FirebaseFirestore.instance
+                .collection('patients')
+                .doc(currentPatientId)
+                .collection('alerts')
+                .where('is_read', isEqualTo: false)
+                .snapshots()
+                .listen((snapshot) {
               if (mounted) setState(() => unreadAlertsCount = snapshot.docs.length);
             });
 
-            FirebaseFirestore.instance.collection('patients').doc(currentPatientId).collection('safe_zones').snapshots().listen((snapshot) {
+            // 👈 1. حفظ الـ listener في المتغير
+            _zonesSubscription = FirebaseFirestore.instance
+                .collection('patients')
+                .doc(currentPatientId)
+                .collection('safe_zones')
+                .snapshots()
+                .listen((snapshot) {
               if (mounted) {
                 setState(() {
                   hasSafeZones = snapshot.docs.isNotEmpty;
@@ -80,10 +99,14 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             });
 
-            setState(() => isLoadingData = false);
-          } else {
-            setState(() => linkedPatientName = "لم تقم بربط تابع حتى الآن");
             if (mounted) setState(() => isLoadingData = false);
+          } else {
+            if (mounted) {
+              setState(() {
+                linkedPatientName = "لم تقم بربط تابع حتى الآن";
+                isLoadingData = false;
+              });
+            }
           }
         }
       } catch (e) {
@@ -96,23 +119,40 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
+
+  // 👈 2. تعديل دالة رفع الصورة لاستخدام Firebase Storage
   Future<void> _pickAndUploadProfileImage() async {
     final ImagePicker picker = ImagePicker();
     try {
       final XFile? pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70,
+        imageQuality: 70, // ضغط الصورة لتوفير المساحة
       );
 
       if (pickedFile != null && currentUserId != null) {
-        setState(() {
-          caregiverImageUrl = pickedFile.path;
-        });
+        // إظهار رسالة جاري الرفع
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("جاري رفع الصورة... ⏳", style: TextStyle(fontFamily: 'Cairo'))),
+        );
 
+        // رفع الصورة للستوريدج
+        final storageRef = FirebaseStorage.instance.ref().child('profile_images').child('$currentUserId.jpg');
+        await storageRef.putFile(File(pickedFile.path));
+        
+        // الحصول على الرابط الدائم
+        final downloadUrl = await storageRef.getDownloadURL();
+
+        if (mounted) {
+          setState(() {
+            caregiverImageUrl = downloadUrl;
+          });
+        }
+
+        // حفظ الرابط في الفايرستور
         await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUserId)
-            .update({'profileImageUrl': pickedFile.path});
+            .update({'profileImageUrl': downloadUrl});
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -128,35 +168,44 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // 👈 1. تنظيف الذاكرة بشكل سليم
+  @override
+  void dispose() {
+    _alertsSubscription?.cancel();
+    _zonesSubscription?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoadingData) {
       return Scaffold(backgroundColor: backgroundLight, body: const Center(child: CircularProgressIndicator(color: Color(0xFF2E7D32))));
     }
 
-   ImageProvider? profileImageProvider; // أضفنا علامة الاستفهام ? لجعله يقبل قيمة فارغة
+    // 👈 5. جلب ارتفاع الشاشة لتوزيع المساحات بشكل ديناميكي
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    ImageProvider? profileImageProvider; 
     if (caregiverImageUrl.isNotEmpty) {
       if (caregiverImageUrl.startsWith('http')) {
         profileImageProvider = NetworkImage(caregiverImageUrl);
       } else {
-        profileImageProvider = FileImage(File(caregiverImageUrl));
+        profileImageProvider = FileImage(File(caregiverImageUrl)); // لدعم أي مسارات محلية قديمة أثناء التطوير
       }
-    } else {
-      profileImageProvider = null; // التعديل هنا: جعلناها null بدلاً من AssetImage
     }
-    // هنا يتم تحديث حالة الألوان لجميع الشاشة بناءً على حالة المريض
+
     return Consumer<LocationProvider>(
       builder: (context, loc, child) {
-        bool connectionLost = loc.status.contains("فقدان الاتصال") || loc.status.contains("⚠️");
+        // 👈 4. تصحيح الخطأ المنطقي: الاعتماد على النص الدقيق بدلاً من الرمز المشترك ⚠️
+        bool connectionLost = loc.status.contains("فقدان الاتصال");
         bool isConnecting = loc.status.contains("جاري جلب");
         bool isDanger = loc.status.contains("خارج النطاق") || connectionLost;
 
-        // اللون الديناميكي الذي سيطبق على الخدمات والدرج
-        Color dynamicColor = const Color(0xFF2E7D32); // أخضر كافتراضي
+        Color dynamicColor = const Color(0xFF2E7D32); 
         if (connectionLost || isDanger) {
-          dynamicColor = const Color(0xFFFF5252); // أحمر
+          dynamicColor = const Color(0xFFFF5252); 
         } else if (isConnecting) {
-          dynamicColor = const Color(0xFFF57C00); // برتقالي
+          dynamicColor = const Color(0xFFF57C00); 
         }
 
         return Directionality(
@@ -164,21 +213,22 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Scaffold(
             key: _scaffoldKey,
             backgroundColor: backgroundLight,
-            // تمرير اللون الديناميكي للدرج
             body: currentPatientId.isEmpty 
                 ? _buildEmptyState() 
-                : _buildMainBody(profileImageProvider, dynamicColor, connectionLost, isConnecting, isDanger, loc.status),
+                : _buildMainBody(profileImageProvider, dynamicColor, connectionLost, isConnecting, isDanger, loc.status, screenHeight),
           ),
         );
       },
     );
   }
 
-Widget _buildMainBody(ImageProvider? profileImage, Color activeColor, bool connectionLost, bool isConnecting, bool isDanger, String statusText) {    return Stack(
+  Widget _buildMainBody(ImageProvider? profileImage, Color activeColor, bool connectionLost, bool isConnecting, bool isDanger, String statusText, double screenHeight) {    
+    return Stack(
       children: [
-        // 1. المحتوى القابل للتمرير أصبح في الأسفل ليسمح للأزرار العلوية بالعمل
         SingleChildScrollView(
-padding: EdgeInsets.only(top: hasSafeZones ? 370 : 100, left: 20, right: 20, bottom: 20),          child: Column(
+          // 👈 5. تحديد المسافة العلوية بناءً على نسبة من الشاشة بدلاً من رقم ثابت
+          padding: EdgeInsets.only(top: hasSafeZones ? (screenHeight * 0.42) + 10 : 100, left: 20, right: 20, bottom: 20),          
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!hasSafeZones) _buildNoSafeZonesCard(context, activeColor), 
@@ -187,21 +237,21 @@ padding: EdgeInsets.only(top: hasSafeZones ? 370 : 100, left: 20, right: 20, bot
               const SizedBox(height: 15),
               _buildServiceTile("التتبع المباشر", "عرض موقع $linkedPatientName الفعلي", Icons.location_on_rounded, () => Navigator.pushNamed(context, '/map', arguments: currentPatientId), activeColor),
               const SizedBox(height: 12),
-              _buildServiceTile("مناطق الأمان", "إدارة المناطق الخاضه ب$linkedPatientName ", Icons.security_rounded, () => Navigator.pushNamed(context, '/add_zone', arguments: currentPatientId), activeColor),
+              _buildServiceTile("مناطق الأمان", "إدارة المناطق الخاصة بـ $linkedPatientName", Icons.security_rounded, () => Navigator.pushNamed(context, '/add_zone', arguments: currentPatientId), activeColor),
               const SizedBox(height: 12),
-              _buildServiceTile("جدول الأدوية", "متابعة المواعيد اليوميه", Icons.medication_rounded, () => Navigator.pushNamed(context, '/medications', arguments: currentPatientId), activeColor),
+              _buildServiceTile("جدول الأدوية", "متابعة المواعيد اليومية", Icons.medication_rounded, () => Navigator.pushNamed(context, '/medications', arguments: currentPatientId), activeColor),
             ],
           ),
         ),
         
-        // 2. الترويسة الملونة أصبحت في الأعلى لتستقبل ضغطات المستخدم دون مشكلة
         if (hasSafeZones) 
-          _buildStatusHeader(isDanger, connectionLost, isConnecting, profileImage, statusText, activeColor),
+          _buildStatusHeader(isDanger, connectionLost, isConnecting, profileImage, statusText, activeColor, screenHeight),
       ],
     );
   }
 
-Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting, ImageProvider? profileImage, String statusText, Color activeColor) {    List<Color> gradientColors;
+  Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting, ImageProvider? profileImage, String statusText, Color activeColor, double screenHeight) {    
+    List<Color> gradientColors;
     String title;
     IconData icon;
 
@@ -219,11 +269,10 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
       icon = Icons.gpp_good_rounded;
     }
 
-    // 1. إضافة AnimatedContainer لتنعيم انتقال ألوان الخلفية
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 600), // مدة حركة تغير اللون
+      duration: const Duration(milliseconds: 600),
       curve: Curves.easeInOut,
-      height: 370, // تم زيادة الارتفاع قليلاً لتجنب خطأ الـ Overflow بسبب مسافة الـ 90
+      height: screenHeight * 0.42, // 👈 5. استخدام ارتفاع ديناميكي يعادل 42% من الشاشة
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: gradientColors),
@@ -244,11 +293,12 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // شريط الأيقونات العلوي
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // 👈 3. تفعيل الضغط لفتح المعرض وتحديث الصورة
                         GestureDetector(
+                          onTap: _pickAndUploadProfileImage,
                           child: Container(
                             padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5)),
@@ -256,7 +306,6 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
                               radius: 18,
                               backgroundColor: Colors.white24,
                               backgroundImage: profileImage,
-                              // التعديل هنا: إضافة الأيقونة في حال لم تكن هناك صورة
                               child: profileImage == null ? const Icon(Icons.person, color: Colors.white) : null,
                             ),
                           ),
@@ -288,19 +337,16 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
                       ],
                     ),
                     const Spacer(),
-                    
-                    // نصوص الترحيب
-                    const Text("مرحباً بك،", style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.white70)),
+                    const Text("حياك الله", style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.white70)),
                     Text(_firstName, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 26, color: Colors.white, height: 1.2)),
                     
-                    const SizedBox(height: 100), 
+                    const SizedBox(height: 60), // تم تقليل الارتفاع الثابت هنا ليناسب الشاشات الصغيرة
                     
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(15),
                       ),
-                      // 2. إضافة AnimatedSwitcher لحركة تغير محتوى الكرت
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 500),
                         transitionBuilder: (Widget child, Animation<double> animation) {
@@ -312,7 +358,6 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
                             ),
                           );
                         },
-                        // المفتاح هنا يخبر فلاتر متى يجب تفعيل الأنيميشن
                         child: Row(
                           key: ValueKey<String>(title + statusText),
                           children: [
@@ -323,7 +368,6 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // 3. التحقق من وجود العنوان لإخفائه مع مسافته في الوضع الآمن
                                   if (title.isNotEmpty) ...[
                                     Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 16)),
                                     const SizedBox(height: 4),
@@ -349,20 +393,6 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
             ),
           ],
         ),
-      ),
-    );
-  }
-
-
-  Widget _buildCleanInfoTile(String title, String subtitle, IconData icon, Color activeColor) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-      leading: Icon(icon, color: activeColor.withOpacity(0.7), size: 22),
-      title: Text(title, style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey[500])),
-      subtitle: Text(
-        subtitle, 
-        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
-        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -425,7 +455,7 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(color: activeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: activeColor), // تغيير لون أيقونات الخدمات ليتوافق مع الحالة
+          child: Icon(icon, color: activeColor), 
         ),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.black38),
       ),
@@ -456,7 +486,6 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                // تأكدي من أن '/pairing' هو المسار الصحيح لشاشة إدخال الكود في ملف routes
                 onPressed: () => Navigator.pushNamed(context, '/pairing'), 
                 icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
                 label: const Text("إدخال كود الربط الآن", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
@@ -474,8 +503,4 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
   }
 
   Widget _buildSectionHeaderTitle(String title) => Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, fontFamily: 'Cairo'));
-
-  
-
-  
 }
