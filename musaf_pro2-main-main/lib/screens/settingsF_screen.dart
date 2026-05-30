@@ -235,7 +235,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                           onTap: () {
                             if (batteryLevel < 20) {
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                content: Text("⚠️ بطارية جهاز التابع منخفضة، يرجى التنبيه بالشحن.", style: TextStyle(fontFamily: 'Cairo')),
+                                content: Text(" بطارية جهاز التابع منخفضه.", style: TextStyle(fontFamily: 'Cairo')),
                                 backgroundColor: Colors.orange,
                               ));
                             }
