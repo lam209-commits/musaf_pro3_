@@ -189,7 +189,7 @@ padding: EdgeInsets.only(top: hasSafeZones ? 370 : 100, left: 20, right: 20, bot
               const SizedBox(height: 12),
               _buildServiceTile("مناطق الأمان", "إدارة المناطق الخاضه ب$linkedPatientName ", Icons.security_rounded, () => Navigator.pushNamed(context, '/add_zone', arguments: currentPatientId), activeColor),
               const SizedBox(height: 12),
-              _buildServiceTile("جدول الأدوية", "متابعة المواعيد اليومية", Icons.medication_rounded, () => Navigator.pushNamed(context, '/medications', arguments: currentPatientId), activeColor),
+              _buildServiceTile("جدول الأدوية", "متابعة المواعيد اليوميه", Icons.medication_rounded, () => Navigator.pushNamed(context, '/medications', arguments: currentPatientId), activeColor),
             ],
           ),
         ),

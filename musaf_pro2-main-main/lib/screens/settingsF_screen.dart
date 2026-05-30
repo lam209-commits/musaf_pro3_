@@ -181,20 +181,68 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             ]),
 
             // التعديل 12: إضافة قسم الأجهزة المرتبطة
+          // قسم الأجهزة المرتبطة (مفعل ديناميكياً 🚀)
             _buildSectionTitle("الأجهزة المرتبطة"),
             _buildSettingsGroup([
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Icon(Icons.smartphone_rounded, color: themeColor, size: 24),
-                ),
-                title: const Text("جهاز المريض", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
-                subtitle: const Text("متصل • بطارية 78% • آخر تحديث الآن", style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.green)),
-                trailing: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
-                onTap: () {}, // يمكن ربطها بشاشة تفاصيل الجهاز لاحقاً
-              ),
+              currentPatientId.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Center(
+                        child: Text("لا يوجد جهاز مرتبط حالياً.", 
+                          style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontWeight: FontWeight.bold)),
+                      ),
+                    )
+                  : StreamBuilder<DocumentSnapshot>(
+                      // نستمع لتحديثات ملف المريض بشكل حي
+                      stream: FirebaseFirestore.instance.collection('users').doc(currentPatientId).snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          );
+                        }
+
+                        var patientData = snapshot.data?.data() as Map<String, dynamic>?;
+                        
+                        // قراءة القيم من قاعدة البيانات (مع قيم افتراضية في حال عدم وجودها بعد)
+                        int batteryLevel = patientData?['batteryLevel'] ?? 0;
+                        bool isOnline = patientData?['isOnline'] ?? false;
+                        Timestamp? lastUpdateTs = patientData?['lastLocationUpdate'];
+
+                        // معالجة النصوص والألوان بناءً على الحالة
+                        String statusText = isOnline ? "متصل" : "غير متصل";
+                        Color statusColor = isOnline ? Colors.green : Colors.redAccent;
+                        IconData statusIcon = isOnline ? Icons.check_circle_rounded : Icons.error_outline_rounded;
+                        
+                        // معالجة وقت آخر تحديث
+                        String timeText = _getTimeAgo(lastUpdateTs);
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                            child: Icon(Icons.smartphone_rounded, color: themeColor, size: 24),
+                          ),
+                          title: const Text("جهاز التابع", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                          // عرض البيانات الحية هنا 🚀
+                          subtitle: Text(
+                            "$statusText • بطارية $batteryLevel% • آخر تحديث $timeText", 
+                            style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: statusColor)
+                          ),
+                          trailing: Icon(statusIcon, color: statusColor, size: 20),
+                          onTap: () {
+                            if (batteryLevel < 20) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                content: Text("⚠️ بطارية جهاز التابع منخفضة، يرجى التنبيه بالشحن.", style: TextStyle(fontFamily: 'Cairo')),
+                                backgroundColor: Colors.orange,
+                              ));
+                            }
+                          }, 
+                        );
+                      },
+                    ),
             ]),
 
             // التعديل 5: إضافة خيار الصوت والاهتزاز للإشعارات
@@ -412,7 +460,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
           ],
         ),
         content: const Text(
-          "يوجد مريض مرتبط بحسابك حالياً.\nيجب نقل الإشراف إلى مرافق آخر أو إزالة الارتباط أولاً لضمان سلامة المريض واستمرار التنبيهات.", 
+          "يوجد تابع مرتبط بحسابك حالياً.\nيجب نقل الإشراف إلى مرافق آخر أو إزالة الارتباط أولاً لضمان سلامة التابع واستمرار التنبيهات.", 
           style: TextStyle(fontFamily: 'Cairo', fontSize: 14, height: 1.5)
         ),
         actions: [
@@ -528,7 +576,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
     );
   }
 
-  void _showPasswordResetDialog() {
+void _showPasswordResetDialog() {
     showDialog(
       context: context,
       builder: (d) => AlertDialog(
@@ -544,14 +592,53 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             child: const Text("إلغاء", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () {
-              Navigator.pop(d);
+            style: ElevatedButton.styleFrom(
+              backgroundColor: themeColor, 
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+            ),
+            // 🚀 إضافة async لأن العملية تتطلب اتصال بالإنترنت (Firebase)
+            onPressed: () async {
+              Navigator.pop(d); // إغلاق النافذة
+              
               if (caregiverEmail.isNotEmpty && caregiverEmail != "لا يوجد بريد إلكتروني مسجل" && !caregiverEmail.contains("جاري")) {
-                FirebaseAuth.instance.sendPasswordResetEmail(email: caregiverEmail);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إرسال الرابط إلى بريدك 📧", style: TextStyle(fontFamily: 'Cairo'))));
+                try {
+                  // 🚀 تفعيل الاتصال الحقيقي بـ Firebase لإرسال رابط إعادة التعيين
+                  await FirebaseAuth.instance.sendPasswordResetEmail(email: caregiverEmail);
+                  
+                  // إظهار رسالة نجاح خضراء إذا تم الإرسال
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("تم إرسال الرابط بنجاح! يرجى تفقد بريدك الإلكتروني 📧", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                        backgroundColor: Colors.green,
+                      )
+                    );
+                  }
+                } on FirebaseAuthException catch (e) {
+                  // 🚀 التقاط أخطاء فايربيس (مثل عدم وجود إنترنت أو الإيميل محذوف)
+                  String errorMsg = "حدث خطأ أثناء إرسال الرابط.";
+                  if (e.code == 'user-not-found') {
+                    errorMsg = "لا يوجد حساب مسجل بهذا البريد.";
+                  } else if (e.code == 'network-request-failed') {
+                    errorMsg = "تأكد من اتصالك بالإنترنت 📡.";
+                  }
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(errorMsg, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                        backgroundColor: Colors.red,
+                      )
+                    );
+                  }
+                }
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("بريد إلكتروني غير صالح.", style: TextStyle(fontFamily: 'Cairo'))));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("بريد إلكتروني غير صالح ⚠️", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    backgroundColor: Colors.orange,
+                  )
+                );
               }
             },
             child: const Text("إرسال الرابط", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold))
@@ -592,9 +679,11 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             onPressed: () {
               Navigator.pop(d);
               if (hasPatient) {
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تحتاج لفك الارتباط أولاً.", style: TextStyle(fontFamily: 'Cairo'))));
+                 // 🚀 استدعاء نافذة التأكيد لفك الارتباط الفعلي
+                 _confirmUnlinkPatient();
               } else {
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الرجاء إدخال كود المريض", style: TextStyle(fontFamily: 'Cairo'))));
+                 // 🚀 توجيه المستخدم لصفحة إدخال كود الربط لإضافة مريض جديد
+                 Navigator.pushNamed(context, '/pairing');
               }
             },
             child: Text(hasPatient ? "فك الارتباط" : "إضافة مريض", style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold))
@@ -602,5 +691,70 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
         ],
       ),
     );
+  }
+
+  // 🚀 دالة جديدة: تقوم بحذف الارتباط فعلياً من قاعدة البيانات (Firestore)
+  void _confirmUnlinkPatient() {
+    showDialog(
+      context: context,
+      builder: (d) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("تأكيد فك الارتباط", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.red)),
+        content: const Text("هل أنت متأكد أنك تريد فك ارتباطك بهذا التابع؟ لن تتلقى أي تنبيهات أو بيانات بعد الآن.", style: TextStyle(fontFamily: 'Cairo', fontSize: 14, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d), 
+            child: const Text("إلغاء", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () async {
+              Navigator.pop(d);
+              if (currentUserId != null) {
+                // 1. مسح الارتباط من قاعدة البيانات
+                await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({
+                  'linkedPatientId': '',
+                  'linkedPatientName': FieldValue.delete(), // حذف الاسم إن وجد
+                });
+                
+                // 2. تحديث الشاشة محلياً
+                setState(() {
+                  currentPatientId = "";
+                });
+                
+                // 3. عرض رسالة النجاح
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("تم فك الارتباط بنجاح ✅", style: TextStyle(fontFamily: 'Cairo')),
+                    backgroundColor: Colors.green,
+                  ));
+                  
+                  // إعادة التوجيه للوحة التحكم لتفعيل حاجز الأمان وإجباره على ربط مريض جديد
+                  Navigator.pushReplacementNamed(context, '/home');
+                }
+              }
+            },
+            child: const Text("تأكيد الفك", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold))
+          ),
+        ],
+      ),
+    );
+  }
+  // دالة لتحويل الوقت إلى صيغة مقروءة (توضع داخل الكلاس)
+  String _getTimeAgo(Timestamp? timestamp) {
+    if (timestamp == null) return "غير معروف";
+    
+    DateTime lastUpdate = timestamp.toDate();
+    Duration diff = DateTime.now().difference(lastUpdate);
+
+    if (diff.inMinutes < 1) {
+      return "الآن";
+    } else if (diff.inMinutes < 60) {
+      return "منذ ${diff.inMinutes} دقيقة";
+    } else if (diff.inHours < 24) {
+      return "منذ ${diff.inHours} ساعة";
+    } else {
+      return "منذ ${diff.inDays} يوم";
+    }
   }
 }

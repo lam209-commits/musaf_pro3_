@@ -9,14 +9,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart'; 
 import 'firebase_options.dart';
 
-// ⚙️ الخدمات
 import 'package:musaf_pro/services/notification_service.dart';
 
-// 📂 الـ Providers
 import 'package:musaf_pro/providers/location_provider.dart';
 import 'package:musaf_pro/data/repositories/firebase_zone_repository.dart';
 
-// 🗺️ الشاشات
 import 'package:musaf_pro/screens/home_screen.dart' as caregiver_home;
 import 'package:musaf_pro/screens/map_screen.dart';
 import 'package:musaf_pro/screens/add_zone_screen.dart';

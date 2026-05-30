@@ -59,12 +59,30 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       );
     }
 
-    final List<Widget> pages = [
+   final List<Widget> pages = [
       const HomeScreen(), 
-      FamilyAlertsScreen(patientId: _currentPatientId), 
+      
+      // 🚀 التعديل هنا: حماية شاشة التنبيهات من الانهيار إذا كان الـ ID فارغاً
+      _currentPatientId.isEmpty 
+          ? const Scaffold(
+              backgroundColor: Color(0xFFF8F9FD),
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.notifications_off_rounded, size: 80, color: Colors.black26),
+                    SizedBox(height: 16),
+                    Text("لا يوجد تابع مرتبط!", style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    SizedBox(height: 8),
+                    Text("قم بربط تابع أولاً لعرض التنبيهات هنا.", style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            )
+          : FamilyAlertsScreen(patientId: _currentPatientId), 
+          
       const CaregiverSettingsScreen(), 
     ];
-
     // 👈 التعديل السحري هنا: قراءة حالة المريض وتحديد اللون ديناميكياً
     return Consumer<LocationProvider>(
       builder: (context, locProvider, child) {
