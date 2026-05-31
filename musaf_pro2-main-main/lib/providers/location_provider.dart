@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -120,36 +121,76 @@ class LocationProvider with ChangeNotifier {
   }
 
   // --- محرك التتبع الذكي المطور (Geofencing Engine) ---
-  Future<void> startPatientTracking(String patientId) async {
-if (!await _checkLocationPermissions()) { 
-  _trackingState = TrackingState.error; // 👈 إضافة: حالة خطأ بسبب الصلاحيات
-  notifyListeners();
-      return; 
-    }
+Future<void> startPatientTracking(String patientId) async {
+    // 1. لا نحتاج هنا لفحص صلاحيات الموقع الخاصة بالهاتف (لأننا نجلب البيانات من السحابة)
+    
     if (_patientName == "التابع") {
       await fetchPatientName(patientId);
     }
 
+    // إلغاء أي اشتراكات سابقة
     await _positionStream?.cancel();
     _signalTimer?.cancel();
 
-    
-    
     _isTracking = true;
-    _status = "جاري التحديد...";
-    _trackingState = TrackingState.loading; // 👈 إضافة: حالة التحميل وبدء التتبع
+    _status = "جاري الاتصال بجهاز التابع...";
+    _trackingState = TrackingState.loading;
     _lastUpdateTime = DateTime.now();
-    _lastSignalAlertTime = null; 
-    _lastOutsideZoneAlertTime = null; 
+    _lastSignalAlertTime = null;
+    _lastOutsideZoneAlertTime = null;
     notifyListeners();
 
+    // 2. الاستماع إلى تحديثات الموقع من Firebase (موقع التابع)
+   _positionStream = FirebaseFirestore.instance
+    .collection('patients')
+    .doc(patientId)
+    .snapshots()
+    .listen(
+  (snapshot) {
+    if (snapshot.exists && snapshot.data() != null) {
+      final data = snapshot.data() as Map<String, dynamic>;
+      
+      final double lat = (data['latitude'] ?? 0.0).toDouble();
+      final double lng = (data['longitude'] ?? 0.0).toDouble();
+
+      // هذا الـ Constructor مصمم للإصدارات الحديثة من geolocator
+      _currentPosition = Position(
+        latitude: lat,
+        longitude: lng,
+        timestamp: DateTime.now(),
+        accuracy: 0.0,
+        altitude: 0.0,
+        heading: 0.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+        // هذه الحقول مطلوبة في الإصدارات الأخيرة من مكتبة geolocator:
+        altitudeAccuracy: 0.0,
+        headingAccuracy: 0.0,
+      );
+
+      _lastUpdateTime = DateTime.now();
+      _trackingState = TrackingState.tracking;
+      _status = "يتم تتبع $_patientName بنجاح 📍";
+      
+      _processLocationUpdate(_currentPosition!, patientId);
+      notifyListeners();
+    }
+  },
+  onError: (error) {
+    debugPrint("Firebase Stream Error: $error");
+    _status = "خطأ في الاتصال بجهاز التابع ⚠️";
+    _trackingState = TrackingState.error;
+    notifyListeners();
+  },
+) as StreamSubscription<Position>?;
+    // 3. مؤقت فحص فقدان الإشارة (كما هو)
     _signalTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       if (_lastUpdateTime != null) {
         int minutesSinceLastUpdate = DateTime.now().difference(_lastUpdateTime!).inMinutes;
 
         if (minutesSinceLastUpdate >= 3) {
-          _status = "فقدان الاتصال بجهاز $_patientName! 📡";    
-          _trackingState = TrackingState.connectionLost; // 👈 إضافة: حالة فقدان الاتصال      
+          _status = "فقدان الاتصال بجهاز $_patientName! 📡";
+          _trackingState = TrackingState.connectionLost;
           notifyListeners();
 
           if (_lastSignalAlertTime == null || 
@@ -158,16 +199,17 @@ if (!await _checkLocationPermissions()) {
             String lastLocationAddress = await _getFormattedAddress(_currentPosition);
             String lastKnownZone = _getZoneNameById(_currentZoneId);
 
-            // الصياغة الجديدة لتنبيه فقدان الإشارة اللاسلكية
             await _zoneRepository.sendAlert(
               patientId, 
-"$_patientName 📡 تم فقدان الاتصال  \n📌 آخر منطقة $lastKnownZone\n اخر موقع \n 📍$lastLocationAddress   "            );
+              "$_patientName 📡 تم فقدان الاتصال \n📌 آخر منطقة: $lastKnownZone\n📍 آخر موقع: $lastLocationAddress"
+            );
             
-            _lastSignalAlertTime = DateTime.now(); 
+            _lastSignalAlertTime = DateTime.now();
           }
         }
       }
     });
+  
 
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(

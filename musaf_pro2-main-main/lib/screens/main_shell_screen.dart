@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:musaf_pro/screens/patient_home_screen.dart';
 import 'package:musaf_pro/screens/medications_screen.dart';
 import 'package:musaf_pro/screens/health_vitals_screen.dart';
-import 'package:musaf_pro/screens/caregiver_home_screen.dart';
 
 class MainShellScreen extends StatefulWidget {
   const MainShellScreen({super.key});
@@ -23,7 +22,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
     const PatientHomeScreen(), // الرئيسية (Index 0)
     const MedicationsScreen(), // الأدوية (Index 1)
     const HealthVitalsScreen(), // القياسات الحيوية (Index 2)
-    const CaregiverHomeScreen(), // المرضى أو المرافق (Index 3)
   ];
 
   @override

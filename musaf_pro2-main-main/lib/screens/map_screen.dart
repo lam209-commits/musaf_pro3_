@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart'; 
-import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/location_provider.dart';
 import '../widgets/location_status_panel.dart';
@@ -21,7 +20,6 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final Color primaryPurple = const Color(0xFF6C63FF);
-  LatLng? guardianLatLng; 
 
   @override
   void initState() {
@@ -29,9 +27,7 @@ class _MapScreenState extends State<MapScreen> {
     _initMapData();
   }
 
-  /// تهيئة البيانات بشكل منفصل لتحقيق مبدأ فصل المسؤوليات
   void _initMapData() {
-    _fetchGuardianLocation(); 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final pro = context.read<LocationProvider>();
       pro.loadSafeZones(widget.patientId);
@@ -39,19 +35,6 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Future<void> _fetchGuardianLocation() async {
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      if (mounted) {
-        setState(() => guardianLatLng = LatLng(position.latitude, position.longitude));
-      }
-    } catch (e) {
-      debugPrint("خطأ في جلب موقع المراقب: $e");
-    }
-  }
-
-  /// دالة احترافية لفتح خرائط جوجل الخارجية
   Future<void> _navigateToPatient(double lat, double lng) async {
     final String googleMapsUrl = "google.navigation:q=$lat,$lng";
     final Uri uri = Uri.parse(googleMapsUrl);
@@ -59,7 +42,6 @@ class _MapScreenState extends State<MapScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
-      // إذا لم يتوفر تطبيق الخرائط، نفتح الرابط في المتصفح
       final String webUrl = "https://www.google.com/maps/search/?api=1&query=$lat,$lng";
       await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
     }
@@ -72,7 +54,6 @@ class _MapScreenState extends State<MapScreen> {
       appBar: _buildAppBar(),
       body: Consumer<LocationProvider>(
         builder: (context, locProvider, child) {
-          // جلب موقع المريض الحالي
           final patientPos = locProvider.currentPosition;
           LatLng? patientLatLng = patientPos != null 
               ? LatLng(patientPos.latitude, patientPos.longitude) 
@@ -106,13 +87,10 @@ class _MapScreenState extends State<MapScreen> {
           userAgentPackageName: 'com.musaif.app',
         ),
         _buildSafeZonesLayer(locProvider, isDanger),
-        if (isDanger) _buildEmergencyPath(patientLatLng),
         _buildMarkersLayer(patientLatLng, isDanger),
       ],
     );
   }
-
-  // --- دوال بناء الطبقات (Layer Builders) لزيادة وضوح الكود ---
 
   Widget _buildSafeZonesLayer(LocationProvider locProvider, bool isDanger) {
     return CircleLayer(
@@ -131,24 +109,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildEmergencyPath(LatLng? patientLatLng) {
-    if (guardianLatLng == null || patientLatLng == null) return const SizedBox.shrink();
-    
-    return PolylineLayer(
-      polylines: [
-        Polyline(
-          points: [guardianLatLng!, patientLatLng!],
-          color: Colors.redAccent.withOpacity(0.6),
-          strokeWidth: 3.0,
-          // حل مشكلة التنقيط ليعمل على كل الإصدارات:
-          borderColor: Colors.red, // لون إضافي للوضوح
-          borderStrokeWidth: 1.0,
-          // إذا كان الإصدار يدعم StrokePattern نستخدمه، وإلا نكتفي باللون المحذر
-        ),
-      ],
-    );
-  }
-
   Widget _buildMarkersLayer(LatLng? patientLatLng, bool isDanger) {
     return MarkerLayer(
       markers: [
@@ -158,12 +118,6 @@ class _MapScreenState extends State<MapScreen> {
             width: 120, height: 120,
             alignment: Alignment.topCenter,
             child: PatientMarker(isDanger: isDanger),
-          ),
-        if (guardianLatLng != null)
-          Marker(
-            point: guardianLatLng!,
-            width: 50, height: 50,
-            child: const Icon(Icons.person_pin_circle, color: Colors.blue, size: 45),
           ),
       ],
     );
