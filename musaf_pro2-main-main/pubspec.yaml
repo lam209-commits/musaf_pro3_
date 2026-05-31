@@ -41,6 +41,7 @@ dependencies:
   google_fonts: ^6.2.1
   provider: ^6.1.5+1
   firebase_storage: ^12.4.10
+  googleapis_auth: ^1.6.0
 
 dev_dependencies:
   flutter_test:
@@ -50,13 +51,18 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+
   # 🚀 تم إضافة وتعيين مسار مجلد الصور والأنيميشن هنا بدقة
   assets:
     - assets/images/
     - assets/animations/
+    - assets/service_account.json
 
   fonts:
     - family: Almarai
       fonts:
         - asset: assets/fonts/Almarai-Bold.ttf
           weight: 700 # لأن الخط Bold (عريض)
+
+
+      

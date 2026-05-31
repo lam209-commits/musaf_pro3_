@@ -15,6 +15,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latLng;
 import 'package:permission_handler/permission_handler.dart';
+import '../services/fcm_service.dart';
 
 class PatientSOSPage extends StatefulWidget {
   const PatientSOSPage({super.key});
@@ -480,18 +481,66 @@ Future<void> _fetchLocationOnStartup() async {
         backgroundColor: Colors.red));
     _notifyFamily('fall_detection', '🚨 حالة طارئة! تم اكتشاف سقوط للمريض $_patientName.');
   }
-
   Future<void> _notifyFamily(String type, String message) async {
     try {
+      // 1. تحديد موقع المريض بدقة
       Position pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      await FirebaseFirestore.instance.collection('family_alerts').add({
-        'patientName': _patientName, 
-        'location': GeoPoint(pos.latitude, pos.longitude),
-        'message': message,
-        'timestamp': FieldValue.serverTimestamp(),
-        'type': type
-      });
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // 2. جلب معرف المريض الحالي لربط الإشعار بعائلته
+      String? patientId = FirebaseAuth.instance.currentUser?.uid;
+
+      if (patientId != null) {
+        // 3. 🚨 التعديل هنا: حفظ التنبيه في المسار الصحيح (داخل ملف المريض) لكي يقرأه تطبيق الأهل
+        DocumentReference alertRef = FirebaseFirestore.instance
+            .collection('patients')
+            .doc(patientId)
+            .collection('alerts')
+            .doc();
+
+        await alertRef.set({
+          'id': alertRef.id, // ضروري عشان ميزة الحذف (Swipe to delete) عند الأهل
+          'patientId': patientId,
+          'patientName': _patientName,
+          'location': GeoPoint(pos.latitude, pos.longitude),
+          'message': message,
+          'timestamp': FieldValue.serverTimestamp(),
+          'type': type,
+          'is_read': false,
+        });
+
+        // 4. جلب التوكن الخاص بالأهل لإرسال الإشعار الفوري
+        DocumentSnapshot patientDoc = await FirebaseFirestore.instance
+            .collection('patients')
+            .doc(patientId)
+            .get();
+
+        if (patientDoc.exists && patientDoc.data() != null) {
+          var data = patientDoc.data() as Map<String, dynamic>;
+
+          // محاولة جلب التوكن
+          String? familyFcmToken = data['familyFcmToken'] ?? data['fcmToken'];
+
+          if (familyFcmToken != null) {
+            // إرسال الإشعار المباشر
+            await FcmService.sendPushMessage(
+              familyToken: familyFcmToken,
+              title: type == 'fall_detection'
+                  ? '⚠️ تنبيه سقوط مريض!'
+                  : '🚨 نداء استغاثة عاجل',
+              body: message,
+              type: type,
+            );
+          } else {
+            debugPrint(
+              "⚠️ تحذير: لم يتم العثور على توكن الأهل في مستند المريض.",
+            );
+          }
+        }
+      }
+
+      // تحديث واجهة المستخدم في حال كانت الحالة اكتشاف سقوط
       if (type == 'fall_detection') {
         setState(() {
           _statusMessage = "تم الإرسال للعائلة بنجاح ✅";
@@ -502,6 +551,7 @@ Future<void> _fetchLocationOnStartup() async {
         });
       }
     } catch (e) {
+      debugPrint("❌ خطأ في دالة _notifyFamily: $e");
       if (type == 'fall_detection') {
         setState(() {
           _statusMessage = "حدث خطأ في الإرسال للعائلة";
@@ -510,7 +560,6 @@ Future<void> _fetchLocationOnStartup() async {
       }
     }
   }
-
   // --- SOS ---
   void _startSOSCountdown() {
     if (_selectedLocation == null) return;
