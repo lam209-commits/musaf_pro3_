@@ -10,6 +10,7 @@ import '../../domain/repositories/auth_repository.dart';
 import 'package:musaf_pro/screens/main_dashboardF_screen.dart'; // تأكدي من المسار الصحيح للملف
 import '../../data/repositories/firebase_auth_repository_impl.dart';
 import 'package:musaf_pro/widgets/custom_button.dart';
+import 'package:flutter/services.dart'; // 👈 أضيفي هذا السطر في الأعلى
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -71,6 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل
+ // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل (نسخة آمنة ومحسنة)
   Future<void> _handleRegister() async {
     // 1. التحقق من الحقول الأساسية
     if (!_formKey.currentState!.validate()) {
@@ -83,10 +85,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // 🚀 [تعديل هام]: تحويل الإيميلات إلى حروف صغيرة لمنع مشاكل التكرار في قاعدة البيانات
+    String enteredEmail = _emailController.text.trim().toLowerCase();
+    String caregiverEmail = _caregiverEmailController.text.trim().toLowerCase();
+
+    // 🚀 [تعديل هام]: منع المريض من وضع إيميله الشخصي كإيميل للمرافق
+    if (userRole == 'patient' && enteredEmail == caregiverEmail) {
+      _showErrorSnackBar('لا يمكن استخدام نفس البريد للمريض والمرافق ⚠️');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      String enteredEmail = _emailController.text.trim();
       String phoneRaw = _phoneController.text.trim();
       String fullPhoneNumber = "+967 $phoneRaw"; 
       String password = _passController.text.trim();
@@ -111,7 +122,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       }
 
-      // 4. إنشاء الحساب المباشر في Firebase Auth (لكي نلتقط أخطاء الإيميل المكرر)
+      // 4. إنشاء الحساب المباشر في Firebase Auth
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: enteredEmail,
         password: password,
@@ -119,40 +130,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       String uid = userCredential.user!.uid;
 
-      // 5. تجهيز هيكل البيانات (UserEntity) الخاص بمعماريتك
+      // 🚀 [تعديل هام]: توليد كود آمن تماماً من 6 أرقام لتجنب أي احتمالية للربط الخاطئ
+      String? generatedPairingCode = userRole == 'patient' 
+          ? (Random.secure().nextInt(900000) + 100000).toString() 
+          : null;
+
+      // 5. تجهيز هيكل البيانات (UserEntity)
       UserEntity newUserEntity = UserEntity(
         uid: uid,
         displayName: _nameController.text.trim(),
         phoneNumber: fullPhoneNumber,
         role: userRole!,
         email: enteredEmail,
-        caregiverEmail: userRole == 'patient' ? _caregiverEmailController.text.trim() : null,
+        caregiverEmail: userRole == 'patient' ? caregiverEmail : null,
         relation: userRole == 'patient' ? _selectedRelation : null,
-        pairingCode: userRole == 'patient' ? (Random().nextInt(9000) + 1000).toString() : null,
+        pairingCode: generatedPairingCode,
         isCaregiverVerified: userRole == 'patient' ? false : null,
         linkedPatientId: userRole == 'caregiver' ? linkedPatientId : null,
         linkedPatientName: userRole == 'caregiver' ? linkedPatientName : null,
       );
 
-      // 6. حفظ البيانات في Firestore عبر الـ Repository
-      await _authRepository.saveUserData(newUserEntity);
+      // 6. حفظ البيانات في Firestore مع حماية التراجع (Rollback)
+      try {
+        await _authRepository.saveUserData(newUserEntity);
+      } catch (e) {
+        // 🚀 [تعديل هام]: إذا فشل الحفظ في Firestore، نحذف حساب Auth لمنع الحسابات اليتيمة
+        await userCredential.user?.delete();
+        throw Exception('فشل حفظ بيانات المستخدم في قاعدة البيانات، تم التراجع.');
+      }
 
       // 7. إرسال الإيميلات والتوجيه
-     if (userRole == 'patient') {
+      if (userRole == 'patient') {
         // إرسال الكود لإيميل المرافق
         await EmailService.sendPairingCode(
           toEmail: newUserEntity.caregiverEmail!,
           pairingCode: newUserEntity.pairingCode!,
         );
-        // 👈 المريض ينتقل لصفحة إكمال بياناته الصحية (لأنه هو مُرسِل الكود)
+        // المريض ينتقل لصفحة إكمال بياناته الصحية
         if (mounted) Navigator.pushReplacementNamed(context, '/health_data'); 
         
       } else if (userRole == 'caregiver') {
-        // 👈 المرافق ينتقل لصفحة إدخال الكود الذي وصله عبر الإيميل لإتمام الربط
+        // المرافق ينتقل لصفحة إدخال الكود
         if (mounted) Navigator.pushReplacementNamed(context, '/pairing'); 
       }
+
     } on FirebaseAuthException catch (e) {
-      // 🚀 8. التقاط أخطاء فايربيس (إيميل مسجل، باسورد ضعيف، الخ) وعرضها بتصميم السناك بار
       if (e.code == 'email-already-in-use') {
         _showErrorSnackBar('هذا البريد مسجل مسبقاً في النظام! يرجى استخدام بريد آخر ⚠️');
       } 
@@ -172,7 +194,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   // دالة عرض رسائل الخطأ بتصميم موحد
   // دالة عرض رسائل الخطأ بتصميم ولون موحد مع التطبيق
   void _showErrorSnackBar(String message) {
@@ -342,6 +363,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // 🌟 دالة بناء الحقل المستقرة والمحسنة هندسياً لتحافظ على نفس حجم وخلفية الكود القديم تماماً
+ // 🌟 دالة بناء الحقل المستقرة والمحسنة لمنع الرموز والحروف في حقل الهاتف
   Widget _buildCustomTextField({
     required TextEditingController controller, 
     required String hint, 
@@ -349,6 +371,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     bool isNumber = false, 
     String? prefixText,
     Widget? suffixIcon,
+    TextInputType? keyboardType, // 👈 1. أضفنا هذا السطر
     required String? Function(String?) validator,
   }) {
     return Container(
@@ -364,8 +387,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         maxLength: isNumber ? 9 : null,
         validator: validator,
         autovalidateMode: AutovalidateMode.onUserInteraction,
+        
+        // 🚀 التعديل هنا: منع المستخدم من إدخال أي شيء عدا الأرقام إذا كان الحقل رقماً
+        inputFormatters: isNumber 
+            ? [FilteringTextInputFormatter.digitsOnly] 
+            : null,
+            
         style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, letterSpacing: 1.0, fontWeight: FontWeight.w500),
-        keyboardType: isNumber ? TextInputType.number : TextInputType.emailAddress,
+        keyboardType: keyboardType ?? (isNumber ? TextInputType.number : TextInputType.text), // 👈 2. التعديل هنا
         decoration: InputDecoration(
           counterText: "", 
           hintText: hint,

@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
+
+// استدعاء طبقات المعمارية النظيفة
+import '../../domain/repositories/auth_repository.dart';
+import '../../data/repositories/firebase_auth_repository_impl.dart';
 
 // 🚀 استدعاء الزر المخصص الموحد
 import 'package:musaf_pro/widgets/custom_button.dart';
@@ -14,51 +19,51 @@ class PairingCodeScreen extends StatefulWidget {
 
 class _PairingCodeScreenState extends State<PairingCodeScreen> {
   final TextEditingController _codeController = TextEditingController();
+  final AuthRepository _authRepository = FirebaseAuthRepositoryImpl(); // 👈 استدعاء الـ Repository
   bool _isLoading = false;
 
-  // دالة التحقق من الكود في قاعدة البيانات والربط الحقيقي
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  // 🚀 دالة التحقق من الكود باستخدام المعمارية النظيفة (تحديث ثنائي الاتجاه)
   void _verifyCode() async {
     String enteredCode = _codeController.text.trim();
 
-    if (enteredCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى إدخال الكود أولاً', style: TextStyle(fontFamily: 'Cairo'))));
+    if (enteredCode.isEmpty || enteredCode.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('يرجى إدخال الكود المكون من 6 أرقام بشكل صحيح ⚠️', style: TextStyle(fontFamily: 'Cairo'))
+      ));
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-      if (currentUserId != null) {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
         
-        // 1. البحث في المستودع عن المستخدم (المريض) الذي يملك هذا الكود
-        var querySnapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .where('pairingCode', isEqualTo: enteredCode)
-            .limit(1)
-            .get();
+        // 🚀 استخدام الدالة الجاهزة في الـ Repository التي تربط الطرفين بـ Batch واحد
+        bool isLinked = await _authRepository.linkCaregiverWithPatient(
+          caregiverId: currentUser.uid,
+          caregiverName: currentUser.displayName ?? 'مرافق',
+          pairingCode: enteredCode,
+        );
 
-        if (querySnapshot.docs.isNotEmpty) {
-          // ✅ الكود صحيح
-          String patientId = querySnapshot.docs.first.id;
-
-          // 2. تحديث الحساب وربط الـ ID
-          await FirebaseFirestore.instance.collection('users').doc(currentUserId).update({
-            'linkedPatientId': patientId,
-          });
-
+        if (isLinked) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('تم الربط بنجاح! جاري تحويلك...', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              content: Text('تم الربط بنجاح! جاري تحويلك... ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
               backgroundColor: Colors.green,
             ));
             
-            // 🚀 التوجيه إلى صفحة المريض
-            // تأكدي من استبدال '/home' باسم المسار الصحيح لصفحة المريض (مثلاً '/patient_dashboard' أو '/health_data')
-            Navigator.pushReplacementNamed(context, '/home'); 
+            // التوجيه إلى صفحة المرافق الرئيسية
+            Navigator.pushReplacementNamed(context, '/caregiver_home'); 
           }
         } else {
-          // ❌ الكود خطأ أو غير موجود
+          // ❌ الكود خطأ أو تم استخدامه مسبقاً
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -71,6 +76,11 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
       }
     } catch (e) {
       debugPrint("Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ في الاتصال ⚠️', style: TextStyle(fontFamily: 'Cairo')), backgroundColor: Colors.red)
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -78,7 +88,7 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const Color musafRed = Color(0xFFB7131A); // تعريف لون مسعف الأحمر
+    const Color musafRed = Color(0xFFB7131A);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -100,7 +110,6 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
         child: Column(
           children: [
             const SizedBox(height: 40),
-            // أيقونة المفتاح باللون الأحمر
             const Icon(Icons.vpn_key_outlined, size: 100, color: musafRed),
             const SizedBox(height: 30),
 
@@ -110,7 +119,8 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
             ),
             const SizedBox(height: 15),
             const Text(
-              "يرجى إدخال الكود المكون من 4 أرقام لإتمام عملية الربط بشكل آمن.",
+              // 👈 التعديل هنا: 6 أرقام بدلاً من 4
+              "يرجى إدخال الكود المكون من 6 أرقام لإتمام عملية الربط بشكل آمن.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5, fontFamily: 'Cairo'),
             ),
@@ -120,7 +130,7 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
             // حقل إدخال الكود
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5), // رمادي فاتح للخلفية
+                color: const Color(0xFFF5F5F5),
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: Colors.grey.shade200),
               ),
@@ -128,15 +138,16 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
                 controller: _codeController,
                 textAlign: TextAlign.center,
                 keyboardType: TextInputType.number,
-                maxLength: 4,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly], // 👈 منع لصق الحروف
+                maxLength: 6, // 👈 التعديل هنا: 6 أرقام
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 15,
+                  letterSpacing: 10,
                   color: musafRed,
                 ),
                 decoration: const InputDecoration(
-                  hintText: "0000",
+                  hintText: "000000", // 👈 التعديل هنا
                   counterText: "",
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 20),
@@ -146,13 +157,12 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
 
             const Spacer(),
 
-            // 🚀 التعديل الاحترافي: ربط الودجت المطور مع تمرير لون مسعف المعتمد بدقة
             _isLoading
                 ? const CircularProgressIndicator(color: musafRed)
                 : CustomButton(
                     text: 'تأكيد الكود والتالي',
                     isPrimary: true,
-                    backgroundColor: musafRed, // اللون الأحمر الكرزي الخاص بكم
+                    backgroundColor: musafRed,
                     onPressed: _verifyCode,
                   ),
 

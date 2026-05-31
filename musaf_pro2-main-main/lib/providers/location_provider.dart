@@ -8,6 +8,7 @@ import 'package:geocoding/geocoding.dart';
 
 import '../../domain/entities/safe_zone.dart';
 import '../../domain/repositories/zone_repository.dart';
+
 enum TrackingState { initial, loading, tracking, error, connectionLost }
 
 class LocationProvider with ChangeNotifier {
@@ -25,7 +26,10 @@ class LocationProvider with ChangeNotifier {
   
   final Battery _battery = Battery();
   DateTime? _lastBatteryAlertTime;
-  StreamSubscription<Position>? _positionStream;
+  
+  // ✅ التعديل الأول: استخدام المتغير الصحيح للاستماع لفايربيس
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _locationSubscription;  
+  
   DateTime? _lastSignalAlertTime; 
   DateTime? _lastOutsideZoneAlertTime; 
   
@@ -84,16 +88,14 @@ class LocationProvider with ChangeNotifier {
   }
 
   // 📝 دالة مساعدة ذكية لصياغة وتجهيز العناوين والمواقع الأخيرة بشكل مرتب ونظيف
- Future<String> _getFormattedAddress(Position? pos) async {
+  Future<String> _getFormattedAddress(Position? pos) async {
     if (pos == null) return "الموقع الحالي غير متوفر";
 
     try {
-      // ✅ سطر واحد فقط لتعريف المتغير وجلب الإحداثيات
       List<Placemark> placemarks = await placemarkFromCoordinates(
         pos.latitude, 
         pos.longitude,
       ).timeout(const Duration(seconds: 4), onTimeout: () => <Placemark>[]);
-      
       
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
@@ -113,7 +115,6 @@ class LocationProvider with ChangeNotifier {
     }
   }
 
-  // دالة مساعدة للحصول على اسم المنطقة الحالية أو الأخيرة بناءً على الـ ID
   String _getZoneNameById(String? zoneId) {
     if (zoneId == null) return "خارج المناطق المحددة";
     final zone = _safeZones.firstWhere((z) => z.id == zoneId, orElse: () => SafeZone(id: '', name: '', latitude: 0, longitude: 0, radius: 0));
@@ -121,15 +122,13 @@ class LocationProvider with ChangeNotifier {
   }
 
   // --- محرك التتبع الذكي المطور (Geofencing Engine) ---
-Future<void> startPatientTracking(String patientId) async {
-    // 1. لا نحتاج هنا لفحص صلاحيات الموقع الخاصة بالهاتف (لأننا نجلب البيانات من السحابة)
-    
+  Future<void> startPatientTracking(String patientId) async {
     if (_patientName == "التابع") {
       await fetchPatientName(patientId);
     }
 
-    // إلغاء أي اشتراكات سابقة
-    await _positionStream?.cancel();
+    // ✅ التعديل الثاني: استخدام الاسم الصحيح للمتغير عند الإلغاء
+    await _locationSubscription?.cancel();
     _signalTimer?.cancel();
 
     _isTracking = true;
@@ -140,50 +139,51 @@ Future<void> startPatientTracking(String patientId) async {
     _lastOutsideZoneAlertTime = null;
     notifyListeners();
 
-    // 2. الاستماع إلى تحديثات الموقع من Firebase (موقع التابع)
-   _positionStream = FirebaseFirestore.instance
-    .collection('patients')
-    .doc(patientId)
-    .snapshots()
-    .listen(
-  (snapshot) {
-    if (snapshot.exists && snapshot.data() != null) {
-      final data = snapshot.data() as Map<String, dynamic>;
-      
-      final double lat = (data['latitude'] ?? 0.0).toDouble();
-      final double lng = (data['longitude'] ?? 0.0).toDouble();
+    // ✅ الاستماع إلى تحديثات الموقع من Firebase (موقع التابع)
+    _locationSubscription = FirebaseFirestore.instance
+      .collection('users') // 👈 تأكدي أن المجموعة اسمها users وليس patients إذا كنتِ تحفظين الكل في users
+      .doc(patientId)
+      .snapshots()
+      .listen(
+    (snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        
+        final double lat = (data['latitude'] ?? 0.0).toDouble();
+        final double lng = (data['longitude'] ?? 0.0).toDouble();
 
-      // هذا الـ Constructor مصمم للإصدارات الحديثة من geolocator
-      _currentPosition = Position(
-        latitude: lat,
-        longitude: lng,
-        timestamp: DateTime.now(),
-        accuracy: 0.0,
-        altitude: 0.0,
-        heading: 0.0,
-        speed: 0.0,
-        speedAccuracy: 0.0,
-        // هذه الحقول مطلوبة في الإصدارات الأخيرة من مكتبة geolocator:
-        altitudeAccuracy: 0.0,
-        headingAccuracy: 0.0,
-      );
+        // تجنب التحديثات الفارغة (0.0)
+        if (lat == 0.0 && lng == 0.0) return;
 
-      _lastUpdateTime = DateTime.now();
-      _trackingState = TrackingState.tracking;
-      _status = "يتم تتبع $_patientName بنجاح 📍";
-      
-      _processLocationUpdate(_currentPosition!, patientId);
+        _currentPosition = Position(
+          latitude: lat,
+          longitude: lng,
+          timestamp: DateTime.now(),
+          accuracy: 0.0,
+          altitude: 0.0,
+          heading: 0.0,
+          speed: 0.0,
+          speedAccuracy: 0.0,
+          altitudeAccuracy: 0.0,
+          headingAccuracy: 0.0,
+        );
+
+        _lastUpdateTime = DateTime.now();
+        _trackingState = TrackingState.tracking;
+        _status = "يتم تتبع $_patientName بنجاح 📍";
+        
+        _processLocationUpdate(_currentPosition!, patientId);
+        notifyListeners();
+      }
+    },
+    onError: (error) {
+      debugPrint("Firebase Stream Error: $error");
+      _status = "خطأ في الاتصال بجهاز التابع ⚠️";
+      _trackingState = TrackingState.error;
       notifyListeners();
-    }
-  },
-  onError: (error) {
-    debugPrint("Firebase Stream Error: $error");
-    _status = "خطأ في الاتصال بجهاز التابع ⚠️";
-    _trackingState = TrackingState.error;
-    notifyListeners();
-  },
-) as StreamSubscription<Position>?;
-    // 3. مؤقت فحص فقدان الإشارة (كما هو)
+    });
+
+    // مؤقت فحص فقدان الإشارة
     _signalTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       if (_lastUpdateTime != null) {
         int minutesSinceLastUpdate = DateTime.now().difference(_lastUpdateTime!).inMinutes;
@@ -209,41 +209,17 @@ Future<void> startPatientTracking(String patientId) async {
         }
       }
     });
-  
 
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10, 
-      ),
-    ).listen(
-      (Position position) {
-        _currentPosition = position;
-        _lastUpdateTime = DateTime.now(); 
-        _lastSignalAlertTime = null;
-        
-        if (_trackingState != TrackingState.tracking) {
-          _trackingState = TrackingState.tracking; // 👈 إضافة: حالة التتبع النشط بنجاح
-          notifyListeners();
-        }
-        
-        _processLocationUpdate(position, patientId);
-      },
-      onError: (error) {
-        _status = "خطأ في المستشعر ⚠️";
-        _trackingState = TrackingState.error; // 👈 إضافة: حالة الخطأ
-        _zoneRepository.sendAlert(patientId, "⚠️ [خطأ في النظام]: حدثت مشكلة في مستشعر الـ GPS الخاص بجهاز التابع: $error");
-        notifyListeners();
-      }
-    );
+    // ❌ التعديل الثالث: تم حذف كود Geolocator من هنا لأنه يخص هاتف المرافق نفسه وليس المريض
   }
 
   void stopTracking() {
-    _positionStream?.cancel();
+    // ✅ تحديث اسم المتغير
+    _locationSubscription?.cancel();
     _signalTimer?.cancel();
     _isTracking = false;
     _status = "تم إيقاف التتبع"; 
-    _trackingState = TrackingState.initial; // 👈 إضافة: العودة للحالة الابتدائية
+    _trackingState = TrackingState.initial; 
     _currentZoneId = null;
     _wasInSafeZone = null;
     _lastOutsideZoneAlertTime = null;
@@ -293,7 +269,6 @@ Future<void> startPatientTracking(String patientId) async {
       _lastOutsideZoneAlertTime = null; 
       
       if (_wasInSafeZone == false) {
-        // الصياغة الجديدة لرسائل الأمان الفورية عند العودة للمنطقة الآمنة
         await _zoneRepository.sendAlert(patientId, "✅ عاد $_patientName إلى المنطقة الآمنة (${activeZone.name})");
       }
     } else {
@@ -303,11 +278,11 @@ Future<void> startPatientTracking(String patientId) async {
         String locationAddress = await _getFormattedAddress(pos);
         String leftZoneName = _getZoneNameById(_currentZoneId);
 
-        // الصياغة الهندسية الجديدة لتنبيهات الخروج الفورية من النطاق
         await _zoneRepository.sendAlert(
           patientId, 
-"🚨 خرج  $_patientName من النطاق الآمن ($leftZoneName).\n📍 الموقع: $locationAddress" );
-_lastOutsideZoneAlertTime = DateTime.now();
+          "🚨 خرج  $_patientName من النطاق الآمن ($leftZoneName).\n📍 الموقع: $locationAddress" 
+        );
+        _lastOutsideZoneAlertTime = DateTime.now();
       }
     }
     
@@ -322,10 +297,10 @@ _lastOutsideZoneAlertTime = DateTime.now();
       
       String locationAddress = await _getFormattedAddress(pos);
 
-      // الصياغة الخاصة بالتذكير التتابعي المستمر
       _zoneRepository.sendAlert(
         patientId, 
-        "⏳ لا يزال $_patientName خارج المنطقة الآمنة \n📍 الموقع الحالي: $locationAddress"      );
+        "⏳ لا يزال $_patientName خارج المنطقة الآمنة \n📍 الموقع الحالي: $locationAddress"      
+      );
       
       _lastOutsideZoneAlertTime = DateTime.now(); 
     }
@@ -354,7 +329,6 @@ _lastOutsideZoneAlertTime = DateTime.now();
     if (level < 20) {
       if (_lastBatteryAlertTime == null || 
           DateTime.now().difference(_lastBatteryAlertTime!).inMinutes > 15) {
-        // الصياغة المحدثة لتنبيه البطارية الحرجة
         _zoneRepository.sendAlert(patientId, "🔋 [تحذير طاقة]: بطارية جهاز المريض ($_patientName) منخفضة جداً ووشكت على النفاد ($level%) يرجى شحن الهاتف فوراً لضمان استمرار التتبع");
         _lastBatteryAlertTime = DateTime.now();
       }
@@ -519,7 +493,8 @@ _lastOutsideZoneAlertTime = DateTime.now();
 
   @override
   void dispose() {
-    _positionStream?.cancel();
+    // ✅ تحديث اسم المتغير هنا أيضاً
+    _locationSubscription?.cancel();
     _signalTimer?.cancel();
     super.dispose();
   }
