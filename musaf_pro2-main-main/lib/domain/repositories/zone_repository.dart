@@ -22,8 +22,11 @@ Future<void> deleteSingleAlert(String patientId, String alertId);
     required bool isSafe,
     required String statusText,
   });
+  
 
   // --- إدارة التنبيهات الذكية ---
 
   Future<void> sendAlert(String patientId, String message);
+  
+  
 }

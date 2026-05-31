@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart'; // 👈 ضروري لرفع الصور
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../providers/location_provider.dart';
 
@@ -64,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
               setState(() {
                 linkedPatientName = patientDoc.data()?['displayName'] ?? "التابع";
               });
+              _saveFamilyTokenToPatient(); 
             } else {
               if (mounted) setState(() => linkedPatientName = "لم يتم العثور على بيانات التابع");
             }
@@ -167,6 +169,26 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint("خطأ أثناء اختيار الصورة: $e");
     }
   }
+  // ... (نهاية كود _pickAndUploadProfileImage)
+
+  // 👈 الصقي الدالة هنا بالضبط
+  Future<void> _saveFamilyTokenToPatient() async {
+    if (currentPatientId.isEmpty) return; 
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      String? token = await messaging.getToken();
+      if (token != null) {
+        await FirebaseFirestore.instance.collection('patients').doc(currentPatientId).set({
+          'familyFcmToken': token, 
+        }, SetOptions(merge: true));
+        debugPrint("✅ تم حفظ توكن العائلة بنجاح في حساب المريض!");
+      }
+    } catch (e) {
+      debugPrint("❌ حدث خطأ أثناء حفظ توكن العائلة: $e");
+    }
+  }
+
 
   // 👈 1. تنظيف الذاكرة بشكل سليم
   @override
@@ -175,6 +197,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _zonesSubscription?.cancel();
     super.dispose();
   }
+
+  
 
   @override
   Widget build(BuildContext context) {
