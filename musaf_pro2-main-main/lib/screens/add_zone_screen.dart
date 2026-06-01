@@ -370,7 +370,7 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("تنبيه  ⚠️", style: TextStyle(fontFamily: 'Cairo', color: Colors.red, fontWeight: FontWeight.bold)),
-        content: const Text("هل أنت متأكد تماماً من حذف جميع المناطق الآمنة دفعة واحدة؟ لا يمكن التراجع عن هذا الإجراء.", style: TextStyle(fontFamily: 'Cairo', height: 1.5)),
+        content: const Text("هل أنت متأكد تماماً من حذف جميع المناطق الآمنة دفعة واحدة؟ لا يمكن التراجع عن هذا الإجراء", style: TextStyle(fontFamily: 'Cairo', height: 1.5)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
           TextButton(

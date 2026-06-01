@@ -176,7 +176,7 @@ Widget _buildUnlinkedState() {
           ),
           const SizedBox(height: 10),
           const Text(
-            "لا يمكنك استخدام لوحة التحكم وتتبع الحالة قبل إدخال كود الربط الخاص بالتابع.",
+            "لا يمكنك استخدام لوحة التحكم وتتبع الحالة قبل إدخال كود الربط الخاص بالتابع",
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Cairo',
@@ -438,7 +438,7 @@ Widget _buildLinkedSettingsView() {
                  size: 60, color: hasPatient ? themeColor : Colors.grey),
             const SizedBox(height: 15),
             Text(
-              hasPatient ? "لديك تابع مرتبط حالياً." : "لا يوجد تابع مرتبط بحسابك.",
+              hasPatient ? "لديك تابع مرتبط حالياً" : "لا يوجد تابع مرتبط بحسابك",
               style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
               textAlign: TextAlign.center,
             ),
@@ -568,7 +568,7 @@ Widget _buildLinkedSettingsView() {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("تغيير كلمة المرور", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         content: const Text(
-          "سيتم إرسال رابط إلى بريدك الإلكتروني لتعيين كلمة مرور جديدة. هل تود الاستمرار؟",
+          "سيتم إرسال رابط إلى بريدك الإلكتروني لتعيين كلمة مرور جديدة هل تود الاستمرار؟",
           style: TextStyle(fontFamily: 'Cairo', fontSize: 14, height: 1.5)
         ),
         actions: [
@@ -585,8 +585,8 @@ Widget _buildLinkedSettingsView() {
                   }
                 } on FirebaseAuthException catch (e) {
                   String errorMsg = "حدث خطأ أثناء إرسال الرابط.";
-                  if (e.code == 'user-not-found') errorMsg = "لا يوجد حساب مسجل بهذا البريد.";
-                  else if (e.code == 'network-request-failed') errorMsg = "تأكد من اتصالك بالإنترنت 📡.";
+                  if (e.code == 'user-not-found') errorMsg = "لا يوجد حساب مسجل بهذا البريد";
+                  else if (e.code == 'network-request-failed') errorMsg = "تأكد من اتصالك بالإنترنت 📡";
                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)), backgroundColor: Colors.red));
                 }
               }
@@ -629,7 +629,7 @@ Widget _buildLinkedSettingsView() {
       applicationName: 'تطبيق مُسعف',
       applicationVersion: '1.0.0',
       applicationLegalese: '© 2026 جميع الحقوق محفوظة',
-      children: [const SizedBox(height: 10), const Text('تطبيق مُسعف لمتابعة المرضى والرعاية الصحية.', style: TextStyle(fontFamily: 'Cairo'))],
+      children: [const SizedBox(height: 10), const Text('تطبيق مُسعف لمتابعة المرضى والرعاية الصحية', style: TextStyle(fontFamily: 'Cairo'))],
     );
   }
 
@@ -640,7 +640,7 @@ Widget _buildLinkedSettingsView() {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("سياسة الخصوصية", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         content: const SingleChildScrollView(
-          child: Text("نحن في تطبيق مُسعف نحرص على حماية بياناتك الشخصية والطبية. لا يتم مشاركة بيانات المواقع والتنبيهات الجغرافية إلا مع المرافقين المعتمدين من قبلك...\n", style: TextStyle(fontFamily: 'Cairo', fontSize: 14, height: 1.5)),
+          child: Text("نحن في تطبيق مُسعف نحرص على حماية بياناتك الشخصية والطبية لا يتم مشاركة بيانات المواقع والتنبيهات الجغرافية إلا مع المرافقين المعتمدين من قبلك...\n", style: TextStyle(fontFamily: 'Cairo', fontSize: 14, height: 1.5)),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("موافق", style: TextStyle(fontFamily: 'Cairo', color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)))],
       ),
@@ -713,7 +713,7 @@ class LinkedDeviceCard extends StatelessWidget {
           onTap: () {
             if (batteryLevel < 20) {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text(" بطارية جهاز التابع منخفضه.", style: TextStyle(fontFamily: 'Cairo')),
+                content: Text(" بطارية جهاز التابع منخفضه", style: TextStyle(fontFamily: 'Cairo')),
                 backgroundColor: Colors.orange,
               ));
             }

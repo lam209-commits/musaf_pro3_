@@ -420,7 +420,7 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
           ),
           const SizedBox(height: 10),
           Text(
-            "أضف منطقة أمان للتابع ($linkedPatientName) للبدء في تتبع الموقع وتلقي التنبيهات الجغرافية.", 
+            "أضف منطقة أمان للتابع ($linkedPatientName) للبدء في تتبع الموقع وتلقي التنبيهات الجغرافية", 
             style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey[700], height: 1.4)
           ),
           const SizedBox(height: 15),
@@ -478,7 +478,7 @@ Widget _buildStatusHeader(bool isDanger, bool connectionLost, bool isConnecting,
             ),
             const SizedBox(height: 10),
             const Text(
-              "لا يمكنك استخدام لوحة التحكم وتتبع الحالة قبل إدخال كود الربط الخاص بالتابع.", 
+              "لا يمكنك استخدام لوحة التحكم وتتبع الحالة قبل إدخال كود الربط الخاص بالتابع", 
               textAlign: TextAlign.center,
               style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey, height: 1.5)
             ),

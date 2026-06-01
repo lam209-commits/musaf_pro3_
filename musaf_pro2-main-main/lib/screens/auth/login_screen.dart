@@ -114,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة.',
+                    'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة',
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 13, height: 1.5),
                   ),
                   const SizedBox(height: 15),

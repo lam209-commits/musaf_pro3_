@@ -107,7 +107,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           TextPosition(offset: _ageController.text.length),
         );
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('عذراً، يرجى إدخال عمر صحيح ⚠️', style: TextStyle(fontFamily: 'Cairo'))),
+          const SnackBar(content: Text('عذراً يرجى إدخال عمر صحيح ⚠️', style: TextStyle(fontFamily: 'Cairo'))),
         );
       }
     }
@@ -309,7 +309,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'هذه المعلومات ورقم هاتف مرافقك ستكون متاحة للمسعفين فور طلبك للنجدة لضمان سلامتك الفورية.',
+              'هذه المعلومات ورقم هاتف مرافقك ستكون متاحة للمسعفين فور طلبك للنجدة لضمان سلامتك الفورية',
               textAlign: TextAlign.right,
               style: TextStyle(fontSize: 13, color: alertColor, fontFamily: 'Cairo'),
             ),

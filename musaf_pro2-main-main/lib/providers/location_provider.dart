@@ -329,7 +329,7 @@ class LocationProvider with ChangeNotifier {
     if (level < 20) {
       if (_lastBatteryAlertTime == null || 
           DateTime.now().difference(_lastBatteryAlertTime!).inMinutes > 15) {
-        _zoneRepository.sendAlert(patientId, "🔋 [تحذير طاقة]: بطارية جهاز المريض ($_patientName) منخفضة جداً ووشكت على النفاد ($level%) يرجى شحن الهاتف فوراً لضمان استمرار التتبع");
+        _zoneRepository.sendAlert(patientId, "🔋 [الطاقة]: بطارية جهاز المريض ($_patientName) منخفضة جداً ووشكت على النفاد ($level%) يرجى شحن الهاتف فوراً لضمان استمرار التتبع");
         _lastBatteryAlertTime = DateTime.now();
       }
     }

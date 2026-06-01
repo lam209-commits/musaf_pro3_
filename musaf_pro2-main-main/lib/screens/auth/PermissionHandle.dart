@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:musaf_pro/core/theme/app_colors.dart';
 import 'package:musaf_pro/screens/main_dashboardF_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:musaf_pro/screens/patient_home_screen.dart'; // تأكدي من المسار الصحيح
 
 class PermissionHandlerWrapper extends StatefulWidget {
   final String userType;
@@ -33,20 +34,20 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
 
     // 1. طلب النشاط البدني (حتى لو رفض، نكمل للباقي)
     await _requestPermission(Permission.activityRecognition, 
-        "يحتاج مسعف للوصول لنشاطك البدني لتحسين دقة التتبع وتوفير الطاقة.");
+        "يحتاج مسعف للوصول لنشاطك البدني لتحسين دقة التتبع وتوفير الطاقة");
 
     // 2. طلب الإشعارات
     await _requestPermission(Permission.notification, 
-        "يجب تفعيل الإشعارات لتبقى على اتصال مع عائلتك واستلام تنبيهات الطوارئ.");
+        "يجب تفعيل الإشعارات لتبقى على اتصال مع عائلتك واستلام تنبيهات الطوارئ");
 
     // 3. طلب الموقع (أثناء الاستخدام)
     bool locGranted = await _requestPermission(Permission.location, 
-        "يعمل تطبيق مسعف بشكل صحيح فقط إذا كان بإمكانه الوصول إلى موقعك.");
+        "يعمل تطبيق مسعف بشكل صحيح فقط إذا كان بإمكانه الوصول إلى موقعك");
 
     // 4. طلب الموقع طوال الوقت (مسموح فقط إذا وافق على الموقع العادي أولاً)
     if (locGranted) {
       await _requestPermission(Permission.locationAlways, 
-          "لضمان عمل تنبيهات 'المناطق الآمنة' حتى والتطبيق مغلق، يرجى اختيار 'السماح طوال الوقت'.");
+          "لضمان عمل تنبيهات 'المناطق الآمنة' حتى والتطبيق مغلق يرجى اختيار 'السماح طوال الوقت'");
     }
 
     // 🛑 الفحص النهائي: هل الأذونات الأساسية (الموقع والإشعارات) متوفرة؟
@@ -138,7 +139,7 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text("صلاحيات مفقودة ⚠️", style: TextStyle(fontFamily: 'Cairo', color: themeColor, fontWeight: FontWeight.bold)),
         content: const Text(
-          "لم يتم منح التطبيق الصلاحيات الأساسية (الموقع والإشعارات). يرجى فتح الإعدادات وتفعيلها يدوياً لتتمكن من استخدام التطبيق.",
+          "لم يتم منح التطبيق الصلاحيات الأساسية (الموقع والإشعارات) يرجى فتح الإعدادات وتفعيلها يدوياً لتتمكن من استخدام التطبيق",
           style: TextStyle(fontFamily: 'Cairo', height: 1.5),
         ),
         actions: [
@@ -157,10 +158,14 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
       _startPermissionFlow();
     });
   }
-
-  @override
+@override
   Widget build(BuildContext context) {
-    if (_isGranted) return const MainDashboardScreen();
+    // 🚀 التوجيه الذكي بناءً على نوع المستخدم بعد الموافقة على الأذونات
+    if (_isGranted) {
+      return widget.userType == "patient" 
+          ? const PatientHomeScreen() 
+          : const MainDashboardScreen();
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -192,6 +197,6 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
           ],
         ),
       ),
+    
     );
-  }
-}
+  }}

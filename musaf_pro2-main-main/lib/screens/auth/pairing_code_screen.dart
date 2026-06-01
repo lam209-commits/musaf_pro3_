@@ -122,7 +122,7 @@ class _PairingCodeScreenState extends State<PairingCodeScreen> {
               ),
               const SizedBox(height: 15),
               const Text(
-                "يرجى إدخال الكود المكون من 6 أرقام لإتمام عملية الربط بشكل آمن.",
+                "يرجى إدخال الكود المكون من 6 أرقام لإتمام عملية الربط بشكل آمن",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5, fontFamily: 'Cairo'),
               ),

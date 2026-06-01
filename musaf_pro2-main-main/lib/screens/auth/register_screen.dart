@@ -116,7 +116,7 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
         final patientEntity = await _authRepository.findPatientByCaregiverEmail(enteredEmail);
 
         if (patientEntity == null) {
-          _showErrorSnackBar('❌ هذا البريد غير مصرح له! يجب أن يضيفك المريض أولاً.');
+          _showErrorSnackBar('❌ هذا البريد غير مصرح له! يجب أن يضيفك المريض أولاً');
           setState(() => _isLoading = false);
           return;
         } else {
@@ -166,7 +166,7 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
       } catch (e) {
         // 🚀 [تعديل هام]: إذا فشل الحفظ في Firestore، نحذف حساب Auth لمنع الحسابات اليتيمة
         await userCredential.user?.delete();
-        throw Exception('فشل حفظ بيانات المستخدم في قاعدة البيانات، تم التراجع.');
+        throw Exception('فشل حفظ بيانات المستخدم في قاعدة البيانات، تم التراجع');
       }
 
       // 7. إرسال الإيميلات والتوجيه
@@ -197,10 +197,10 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
         _showErrorSnackBar('هذا البريد مسجل مسبقاً في النظام! يرجى استخدام بريد آخر ⚠️');
       } 
       else if (e.code == 'weak-password') {
-        _showErrorSnackBar('كلمة المرور ضعيفة جداً، يرجى اختيار كلمة أقوى ⚠️');
+        _showErrorSnackBar('كلمة المرور ضعيفة جداً يرجى اختيار كلمة أقوى ⚠️');
       } 
       else if (e.code == 'network-request-failed') {
-        _showErrorSnackBar('عذراً، فشل الاتصال بالشبكة.. تحقق من الإنترنت 📡');
+        _showErrorSnackBar('عذراً فشل الاتصال بالشبكة.. تحقق من الإنترنت 📡');
       } 
       else {
         _showErrorSnackBar('حدث خطأ أثناء التسجيل: ${e.message}');

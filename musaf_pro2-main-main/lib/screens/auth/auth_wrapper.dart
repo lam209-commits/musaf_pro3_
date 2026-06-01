@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:musaf_pro/screens/auth/PermissionHandle.dart';
 import 'package:musaf_pro/screens/auth/login_screen.dart';
 import 'package:musaf_pro/screens/auth/pairing_code_screen.dart';
 import 'package:musaf_pro/screens/home_screen.dart';
@@ -48,11 +49,12 @@ class AuthWrapper extends StatelessWidget {
                 final bool isLinked = userEntity.linkedPatientId != null && 
                                      userEntity.linkedPatientId!.isNotEmpty;
                 
-                // إذا كان مرتبطاً يذهب للهوم، وإذا لا يذهب لشاشة الربط
-                return isLinked ? const HomeScreen() : const PairingCodeScreen();
+              return isLinked 
+                    ? const PermissionHandlerWrapper(userType: 'caregiver') 
+                    : const PairingCodeScreen();
               } else {
-                // إذا كان مريضاً، يذهب لشاشة المريض مباشرة
-                return const PatientHomeScreen();
+                // 🚀 التعديل هنا: نوجه المريض لشاشة الأذونات أيضاً (مع تمرير نوعه)
+                return const PermissionHandlerWrapper(userType: 'patient');
               }
             },
           );

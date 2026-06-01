@@ -82,12 +82,8 @@ class MyApp extends StatelessWidget {
         '/health_vitals': (context) => const HealthVitalsScreen(),
         '/medications': (context) => const MedicationsScreen(),
         '/daily_medications': (context) => const DailyMedicationsListScreen(),
-        '/patient_home': (context) => const PatientHomeScreen(),
-        
-        // 🚀 توجيه /home يمر عبر شاشة الأذونات أولاً لضمان الأمان
-        '/home': (context) => const PermissionHandlerWrapper(), 
-        
-        '/patient_verification': (context) => const PatientVerificationScreen(),
+'/home': (context) => const PermissionHandlerWrapper(userType: 'caregiver'),
+        '/patient_home': (context) => const PermissionHandlerWrapper(userType: 'patient'),
       },
       onGenerateRoute: (settings) {
         final String patientId = settings.arguments is String ? settings.arguments as String : "user_123";
@@ -141,7 +137,7 @@ class AppInitGate extends StatelessWidget {
 
 // 🚀 تم تحسين شاشة الأذونات لتكون "غلافاً" حقيقياً لا يخرب سجل التنقل
 class PermissionHandlerWrapper extends StatefulWidget {
-  const PermissionHandlerWrapper({super.key});
+  const PermissionHandlerWrapper({super.key, required String userType});
   @override
   State<PermissionHandlerWrapper> createState() => _PermissionHandlerWrapperState();
 }
