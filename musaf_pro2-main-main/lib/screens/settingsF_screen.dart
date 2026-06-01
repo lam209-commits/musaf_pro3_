@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:musaf_pro/core/theme/app_colors.dart';
 import 'package:musaf_pro/presentation/delete_account_dialog.dart';
 import 'package:musaf_pro/presentation/unlink_patient_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 👈 ضروري لحفظ الإعدادات محلياً
@@ -22,6 +23,7 @@ class CaregiverSettingsScreen extends StatefulWidget {
 class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
   // 👈 تهيئة مستودع البيانات لاستخدامه في النوافذ المنبثقة
   final _authRepository = FirebaseAuthRepositoryImpl();
+  String? linkedPatientId; // المتغير الذي يتحكم في ظهور واجهة "غير مرتبط"
 
   final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
   String caregiverName = "المرافق";
@@ -35,14 +37,29 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
   bool zoneAlertsEnabled = true;
   bool soundAndVibrationEnabled = true;
 
-  final Color themeColor = const Color(0xFF2E7D32); 
+  final Color themeColor =AppColors.primary;
+  void _listenToUserChanges() {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
 
+  FirebaseFirestore.instance.collection('users').doc(uid).snapshots().listen((doc) {
+    if (doc.exists && mounted) {
+      setState(() {
+        // تحديث قيمة المريض المرتبط تلقائياً
+        linkedPatientId = doc.data()?['linkedPatientId'];
+        isLoading = false; // إنهاء التحميل
+      });
+    }
+  });
+}
   @override
   void initState() {
     super.initState();
     _loadCaregiverData();
-    _loadPreferences(); // 👈 جلب إعدادات المستخدم المحفوظة
+    _loadPreferences(); 
+    _listenToUserChanges();// 👈 جلب إعدادات المستخدم المحفوظة
   }
+  
 
   // 🚀 دالة جديدة: جلب الإعدادات من التخزين المحلي
   Future<void> _loadPreferences() async {
@@ -115,72 +132,140 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return Scaffold(backgroundColor: const Color(0xFFF8F9FD), body: Center(child: CircularProgressIndicator(color: themeColor)));
-    }
-
-    ImageProvider? profileImageProvider = caregiverImageUrl.isNotEmpty
-        ? (caregiverImageUrl.startsWith('http') ? NetworkImage(caregiverImageUrl) : FileImage(File(caregiverImageUrl)))
-        : null;
-
+ @override
+Widget build(BuildContext context) {
+  if (isLoading) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FD),
-      appBar: AppBar(
         backgroundColor: const Color(0xFFF8F9FD),
-        elevation: 0,
-        centerTitle: true,
-        title: const Text("الإعدادات", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 20)),
-        automaticallyImplyLeading: false,
+        body: Center(child: CircularProgressIndicator(color: themeColor)));
+  }
+
+  return Scaffold(
+    backgroundColor: const Color(0xFFF8F9FD),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFFF8F9FD),
+      elevation: 0,
+      centerTitle: true,
+      title: const Text("الإعدادات",
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 20)),
+      automaticallyImplyLeading: false,
+    ),
+    // هنا التبديل الذكي
+    body: (linkedPatientId == null || linkedPatientId!.isEmpty)
+        ? _buildUnlinkedState()
+        : _buildLinkedSettingsView(),
+  );
+}
+Widget _buildUnlinkedState() {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.link_off_rounded, size: 80, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          const Text(
+            "لم يتم ربط أي تابع بحسابك!",
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "لا يمكنك استخدام لوحة التحكم وتتبع الحالة قبل إدخال كود الربط الخاص بالتابع.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 14,
+              color: Colors.grey,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 30),
+          // 🚀 الزر بنفس تصميم زر الهوم تماماً
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/pairing'),
+              icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
+              label: const Text(
+                "إدخال كود الربط الآن",
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32), // لون الثيم الأخضر
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          children: [
-            Center(
-              child: Stack(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: themeColor.withOpacity(0.3), width: 2)),
-                    child: CircleAvatar(
-                      radius: 45, backgroundColor: Colors.white,
-                      backgroundImage: profileImageProvider,
-                      child: profileImageProvider == null ? Icon(Icons.person, size: 45, color: themeColor) : null,
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0, left: 0,
-                    child: GestureDetector(
-                      onTap: _pickAndUploadProfileImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(color: themeColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                        child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
+    ),
+  );
+}
+// الواجهة الأصلية للإعدادات (الإعدادات الكاملة)
+Widget _buildLinkedSettingsView() {
+  ImageProvider? profileImageProvider = caregiverImageUrl.isNotEmpty
+      ? (caregiverImageUrl.startsWith('http') ? NetworkImage(caregiverImageUrl) : FileImage(File(caregiverImageUrl)))
+      : null;
+
+  return SafeArea(
+    child: ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      children: [
+        Center(
+          child: Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: themeColor.withOpacity(0.3), width: 2)),
+                child: CircleAvatar(
+                  radius: 45,
+                  backgroundColor: Colors.white,
+                  backgroundImage: profileImageProvider,
+                  child: profileImageProvider == null
+                      ? Icon(Icons.person, size: 45, color: themeColor)
+                      : null,
+                ),
               ),
-            ),
-            const SizedBox(height: 15),
-            
-            Center(
-              child: Column(
-                children: [
-                  Text(caregiverName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                  const SizedBox(height: 4),
-                  Text(caregiverEmail, style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey[600])),
-                ],
+              Positioned(
+                bottom: 0,
+                left: 0,
+                child: GestureDetector(
+                  onTap: _pickAndUploadProfileImage,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                        color: themeColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2)),
+                    child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
+            ],
+          ),
+        ),
+        const SizedBox(height: 15),
 
             _buildSectionTitle("الحساب"),
             _buildSettingsGroup([
               _buildSettingsTile(Icons.person_outline, "الملف الشخصي", onTap: () => _showEditProfileDialog()),
               _buildDivider(),
-              _buildSettingsTile(Icons.groups_outlined, "إدارة المرضى", onTap: () => _showManagePatientsDialog()),
+              _buildSettingsTile(Icons.groups_outlined, "انهاء الارتباط بالتابع ", onTap: () => _showManagePatientsDialog()),
               _buildDivider(),
               _buildSettingsTile(Icons.lock_outline_rounded, "الأمان وكلمة المرور", onTap: () => _showPasswordResetDialog()),
             ]),
@@ -220,11 +305,11 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             ]),
 
             _buildSettingsGroup([
-              _buildSettingsTile(Icons.logout_rounded, "تسجيل الخروج", color: Colors.orange, onTap: () => _showLogoutDialog()),
+              _buildSettingsTile(Icons.logout_rounded, "تسجيل الخروج", color: AppColors.error, onTap: () => _showLogoutDialog()),
             ]),
 
             const SizedBox(height: 25),
-            _buildSectionTitle(" حذف الحساب ", color: Colors.redAccent),
+            _buildSectionTitle(" حذف الحساب ", color:  AppColors.error),
             Container(
               margin: const EdgeInsets.only(bottom: 40),
               decoration: BoxDecoration(
@@ -236,14 +321,14 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
               child: Column(
                 children: [
                   
-                  _buildSettingsTile(Icons.delete_forever_rounded, "حذف الحساب نهائياً", color: Colors.red, onTap: () => _handleDeleteRequest()),
+                  _buildSettingsTile(Icons.delete_forever_rounded, "حذف الحساب نهائياً", color: AppColors.error, onTap: () => _handleDeleteRequest()),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
+      );
+    
   }
 
   // ----------- الهيكلة البصرية -----------
@@ -316,7 +401,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
               await FirebaseAuth.instance.signOut(); 
               if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false); 
             }, 
-            child: const Text("خروج", style: TextStyle(fontFamily: 'Cairo', color: Colors.red, fontWeight: FontWeight.bold))
+            child: const Text("خروج", style: TextStyle(fontFamily: 'Cairo', color: AppColors.error, fontWeight: FontWeight.bold))
           )
         ],
       )
@@ -345,7 +430,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
       context: context,
       builder: (d) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("إدارة المرضى", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        title: const Text("انهاء الارتباط  ", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -353,7 +438,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                  size: 60, color: hasPatient ? themeColor : Colors.grey),
             const SizedBox(height: 15),
             Text(
-              hasPatient ? "لديك مريض مرتبط حالياً." : "لا يوجد مريض مرتبط بحسابك.",
+              hasPatient ? "لديك تابع مرتبط حالياً." : "لا يوجد تابع مرتبط بحسابك.",
               style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
               textAlign: TextAlign.center,
             ),
@@ -365,7 +450,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             child: const Text("إغلاق", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: hasPatient ? Colors.red : themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(backgroundColor: hasPatient ? AppColors.error : themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () async {
               Navigator.pop(d);
               if (hasPatient) {
@@ -387,7 +472,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                  Navigator.pushNamed(context, '/pairing');
               }
             },
-            child: Text(hasPatient ? "فك الارتباط" : "إضافة مريض", style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold))
+            child: Text(hasPatient ? "فك الارتباط" : "إضافة تابع", style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold))
           ),
         ],
       ),
@@ -456,14 +541,14 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                       content: Text("تم تحديث البيانات ✅", style: TextStyle(fontFamily: 'Cairo')),
-                      backgroundColor: Colors.green,
+                      backgroundColor: AppColors.primary,
                     ));
                   }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                       content: Text("حدث خطأ أثناء حفظ البيانات", style: TextStyle(fontFamily: 'Cairo')),
-                      backgroundColor: Colors.red,
+                      backgroundColor: AppColors.error
                     ));
                   }
                 }
@@ -608,7 +693,7 @@ class LinkedDeviceCard extends StatelessWidget {
         Timestamp? lastUpdateTs = patientData?['lastLocationUpdate'];
 
         String statusText = isOnline ? "متصل" : "غير متصل";
-        Color statusColor = isOnline ? Colors.green : Colors.redAccent;
+        Color statusColor = isOnline ? AppColors.primary : AppColors.error;
         IconData statusIcon = isOnline ? Icons.check_circle_rounded : Icons.error_outline_rounded;
         String timeText = _getTimeAgo(lastUpdateTs);
 

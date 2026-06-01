@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart'; // 👈 ضروري لحفظ حالة المشاهدة
 
-// 🚀 تم استدعاء ملف الزر المخصص هنا
+// 🚀 استدعاء ملف الزر المخصص
 import 'package:musaf_pro/widgets/custom_button.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -28,6 +29,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     Timer(const Duration(milliseconds: 500), () {
       if (mounted) setState(() => showFloatingImage = true);
     });
+  }
+
+  // 🚀 دالة لحفظ حالة إنهاء الـ Onboarding والانتقال
+  Future<void> _finishOnboarding(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenOnboarding', true); // حفظ الحالة في الجهاز
+    
+    if (context.mounted) {
+      // توجيه جذري لشاشة تسجيل الدخول لمنع العودة لهذه الشاشة
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    }
   }
 
   @override
@@ -65,8 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     context,
                     image: 'assets/images/Hero Section.png',
                     title: 'وضع الطوارئ بلمسة واحدة',
-                    desc:
-                        'فعل حالة الطوارئ فوراً بضغطة زر أو عبر الأوامر الصوتية، وسنقوم بمشاركة موقعك المباشر مع عائلتك فوراً.',
+                    desc: 'فعل حالة الطوارئ فوراً بضغطة زر ، وسنقوم بمشاركة موقعك المباشر مع عائلتك فوراً.',
                     isFirst: true,
                   ),
                   buildAnimatedStepPage(
@@ -75,8 +86,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     topCard: 'assets/images/Floating Results Card.png',
                     bottomCard: 'assets/images/Status Alert.png',
                     title: 'تحليل الجروح بالذكاء الاصطناعي',
-                    desc:
-                        'احصل على تحليل فوري لإصابتك من خلال الكاميرا، مع إرشادات إسعافية ذكية وتفاعلية لضمان سلامتك.',
+                    desc: 'احصل على تحليل فوري لإصابتك من خلال الكاميرا، مع إرشادات إسعافية ذكية وتفاعلية لضمان سلامتك.',
                     isVisible: showAnalysisElements,
                   ),
                   buildAnimatedStepPage(
@@ -85,8 +95,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     topCard: 'assets/images/SafeZone_Top.png',
                     bottomCard: 'assets/images/SafeZone_Bottom.png',
                     title: 'نطاقات آمنة لعائلتك',
-                    desc:
-                        'حدد مناطق آمنة على الخريطة وسنصلك بتنبيه فوري عند خروج المريض منها أو دخوله إليها.',
+                    desc: 'حدد مناطق آمنة على الخريطة وسنصلك بتنبيه فوري عند خروج المريض منها أو دخوله إليها.',
                     isVisible: showSafeZoneElements,
                   ),
                 ],
@@ -122,13 +131,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     textDirection: TextDirection.rtl,
                     child: Column(
                       children: [
-                        // 🚀 تم استبدال الكود الطويل باستدعاء الكومبوننت الجاهز (CustomButton)
+                        // 🚀 استخدام دالة الحفظ عند إنهاء الترحيب
                         CustomButton(
                           text: isLastPage ? 'ابدأ الآن' : 'التالي',
                           isPrimary: true, // زر أساسي بخلفية حمراء
                           onPressed: () {
                             if (isLastPage) {
-                              Navigator.pushReplacementNamed(context, '/login');
+                              _finishOnboarding(context); // 👈 هنا
                             } else {
                               _controller.nextPage(
                                 duration: const Duration(milliseconds: 500),
@@ -139,14 +148,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
 
                         if (!isLastPage)
-                          // 🚀 استدعاء زر التخطي الجاهز
+                          // 🚀 استخدام دالة الحفظ عند التخطي
                           CustomButton(
                             text: 'تخطي',
                             isPrimary: false, // زر شفاف بدون خلفية
-                            onPressed: () => Navigator.pushReplacementNamed(
-                              context,
-                              '/login',
-                            ),
+                            onPressed: () => _finishOnboarding(context), // 👈 وهنا
                           ),
                       ],
                     ),

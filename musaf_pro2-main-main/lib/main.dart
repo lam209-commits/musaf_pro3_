@@ -3,18 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:musaf_pro/screens/main_dashboardF_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart'; 
+import 'package:shared_preferences/shared_preferences.dart'; // 👈 ضروري لفحص شاشة الترحيب
+
 import 'firebase_options.dart';
-
 import 'package:musaf_pro/services/notification_service.dart';
-
 import 'package:musaf_pro/providers/location_provider.dart';
 import 'package:musaf_pro/data/repositories/firebase_zone_repository.dart';
 
+// 🚀 استدعاء AuthWrapper الذي صنعناه مسبقاً (تأكدي من المسار الصحيح)
+import 'package:musaf_pro/screens/auth/auth_wrapper.dart'; 
+
 import 'package:musaf_pro/screens/home_screen.dart' as caregiver_home;
+import 'package:musaf_pro/screens/main_dashboardF_screen.dart';
 import 'package:musaf_pro/screens/map_screen.dart';
 import 'package:musaf_pro/screens/add_zone_screen.dart';
 import 'package:musaf_pro/screens/family_alerts_screen.dart';
@@ -29,7 +32,6 @@ import 'package:musaf_pro/screens/patient_home_screen.dart';
 import 'package:musaf_pro/screens/health_vitals_screen.dart';
 import 'package:musaf_pro/screens/medications_screen.dart';
 import 'package:musaf_pro/screens/daily_medications_list_screen.dart';
-// تأكدي من كتابة المسار الصحيح للملف حسب مجلدات مشروعك
 import 'screens/patient_verification_screen.dart';
 
 @pragma('vm:entry-point')
@@ -64,11 +66,11 @@ class MyApp extends StatelessWidget {
       title: 'مُسعف',
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Almarai',
+        fontFamily: 'Almarai', // يمكنكِ تغييره إلى Cairo إذا أردتِ توحيد الخطوط
         primarySwatch: Colors.red,
         scaffoldBackgroundColor: Colors.white,
       ),
-      home: const AppInitGate(),
+      home: const AppInitGate(), // 👈 البوابة الذكية التي تفحص الـ Onboarding
       routes: {
         '/splash': (context) => const SplashScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
@@ -81,7 +83,10 @@ class MyApp extends StatelessWidget {
         '/medications': (context) => const MedicationsScreen(),
         '/daily_medications': (context) => const DailyMedicationsListScreen(),
         '/patient_home': (context) => const PatientHomeScreen(),
-        '/home': (context) => const MainDashboardScreen(),
+        
+        // 🚀 توجيه /home يمر عبر شاشة الأذونات أولاً لضمان الأمان
+        '/home': (context) => const PermissionHandlerWrapper(), 
+        
         '/patient_verification': (context) => const PatientVerificationScreen(),
       },
       onGenerateRoute: (settings) {
@@ -107,43 +112,34 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// 🚀 البوابة الذكية الجديدة: تفحص هل شاهد المستخدم شاشة الترحيب أم لا
 class AppInitGate extends StatelessWidget {
   const AppInitGate({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return const AuthGate();
+
+  Future<bool> _checkFirstSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('hasSeenOnboarding') ?? false;
   }
-}
-
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    return FutureBuilder<bool>(
+      future: _checkFirstSeen(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const SplashScreen();
-        
-        if (snapshot.hasData && snapshot.data != null) {
-          return FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance.collection('users').doc(snapshot.data!.uid).get(),
-            builder: (context, userSnapshot) {
-              if (userSnapshot.connectionState == ConnectionState.waiting) return const SplashScreen();
-              
-              final data = userSnapshot.data?.data() as Map<String, dynamic>?;
-              final String role = data?['role'] ?? 'patient';
-              
-              return role == 'caregiver' ? const PermissionHandlerWrapper() : const PatientHomeScreen();
-            },
-          );
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashScreen(); // عرض السبلاش أثناء الفحص
         }
-        return const OnboardingScreen();
+        
+        final bool hasSeenOnboarding = snapshot.data ?? false;
+        
+        // التوجيه: إما حارس البوابة (AuthWrapper) أو شاشة الترحيب
+        return hasSeenOnboarding ? const AuthWrapper() : const OnboardingScreen();
       },
     );
   }
 }
 
+// 🚀 تم تحسين شاشة الأذونات لتكون "غلافاً" حقيقياً لا يخرب سجل التنقل
 class PermissionHandlerWrapper extends StatefulWidget {
   const PermissionHandlerWrapper({super.key});
   @override
@@ -151,6 +147,8 @@ class PermissionHandlerWrapper extends StatefulWidget {
 }
 
 class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
+  bool _isGranted = false;
+
   @override
   void initState() {
     super.initState();
@@ -162,18 +160,7 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
     if (statuses[Permission.location]!.isDenied || statuses[Permission.notification]!.isDenied) {
       if (mounted) _showPermissionDialog();
     } else {
-      _navigateToHome();
-    }
-  }
-
-  // استبدل الدالة القديمة بهذه الدالة
-  void _navigateToHome() {
-    if (mounted) {
-      // ننتقل إلى شاشة الحاوية التي تحتوي على الـ BottomNav
-      Navigator.pushReplacement(
-        context, 
-        MaterialPageRoute(builder: (context) => const MainDashboardScreen()),
-      );
+      if (mounted) setState(() => _isGranted = true);
     }
   }
 
@@ -183,13 +170,14 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text("أذونات التشغيل"),
-        content: const Text("يرجى السماح بالوصول للموقع والإشعارات لعمل التطبيق."),
+        content: const Text("يرجى السماح بالوصول للموقع والإشعارات لعمل التطبيق بشكل صحيح."),
         actions: [
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(context); // إغلاق النافذة
               await [Permission.location, Permission.notification].request();
-              _navigateToHome();
+              // تحديث الحالة لتشغيل الواجهة
+              if (mounted) setState(() => _isGranted = true); 
             },
             child: const Text("موافق"),
           ),
@@ -199,5 +187,10 @@ class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
   }
 
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget build(BuildContext context) {
+    // 🚀 عرض الداشبورد مباشرة بدون Navigator.push لتجنب الشاشة السوداء
+    return _isGranted 
+        ? const MainDashboardScreen() 
+        : const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
 }

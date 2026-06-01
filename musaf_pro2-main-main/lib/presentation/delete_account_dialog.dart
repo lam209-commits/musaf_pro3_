@@ -166,7 +166,7 @@ content: Column(
   final caregiverDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
   if (!caregiverDoc.exists) return null;
 
-  final data = caregiverDoc.data() as Map<String, dynamic>?;
+  final data = caregiverDoc.data();
   final String? patientId = data?['linkedPatientId'];
 
   if (patientId == null || patientId.isEmpty) return null;

@@ -56,6 +56,31 @@ class RoleSelectionScreen extends StatelessWidget {
                   arguments: 'caregiver',
                 ),
               ),
+              // ... تحت CustomButton الخاص بـ "أنا مرافق"
+const SizedBox(height: 30), // مسافة بسيطة قبل زر الدخول
+
+// زر تسجيل الدخول
+Row(
+  mainAxisAlignment: MainAxisAlignment.center,
+  children: [
+    const Text(
+      "لديك حساب بالفعل؟",
+      style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+    ),
+    TextButton(
+      onPressed: () => Navigator.pushNamed(context, '/login'),
+      child: const Text(
+        "تسجيل الدخول",
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontSize: 14,
+          color: Color(0xFFB7131A), // نستخدم الأحمر ليتماشى مع شعار التطبيق
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ),
+  ],
+),
             ],
           ),
         ),

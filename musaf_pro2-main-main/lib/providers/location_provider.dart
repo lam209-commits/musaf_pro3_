@@ -80,7 +80,7 @@ class LocationProvider with ChangeNotifier {
   Future<void> loadSafeZones(String patientId) async {
     try {
       final zones = await _zoneRepository.getSafeZones(patientId);
-      _safeZones = zones.map((e) => e as SafeZone).toList();
+      _safeZones = zones.map((e) => e).toList();
       notifyListeners();
     } catch (e) {
       _handleError("خطأ في تحميل المناطق", e);

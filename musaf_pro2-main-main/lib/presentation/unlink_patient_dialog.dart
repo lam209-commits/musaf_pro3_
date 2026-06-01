@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../domain/repositories/auth_repository.dart';
-import 'package:musaf_pro/core/theme/app_colors.dart'; // تأكدي من المسار الصحيح
+import 'package:musaf_pro/core/theme/app_colors.dart'; 
 
 class UnlinkPatientDialog extends StatefulWidget {
   final String currentUserId;
@@ -25,13 +25,19 @@ class _UnlinkPatientDialogState extends State<UnlinkPatientDialog> {
     setState(() => _isLoading = true);
 
     try {
+      // 1. تنفيذ منطق فك الارتباط في قاعدة البيانات
       await widget.authRepository.unlinkPatientLogic(
         widget.currentUserId,
         widget.patientId,
       );
 
       if (mounted) {
-        Navigator.of(context).pop(true);
+        // 2. إغلاق النافذة المنبثقة بشكل آمن (يمنع خطأ الـ history)
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context, true);
+        }
+
+        // 3. إظهار رسالة النجاح
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('تم فك الارتباط بنجاح ✅', style: TextStyle(fontFamily: 'Cairo')),
@@ -43,7 +49,7 @@ class _UnlinkPatientDialogState extends State<UnlinkPatientDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString(), style: const TextStyle(fontFamily: 'Cairo')),
+            content: Text('خطأ: ${e.toString()}', style: const TextStyle(fontFamily: 'Cairo')),
             backgroundColor: AppColors.error,
           ),
         );
@@ -73,7 +79,13 @@ class _UnlinkPatientDialogState extends State<UnlinkPatientDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isLoading ? null : () => Navigator.of(context).pop(false),
+          onPressed: _isLoading 
+              ? null 
+              : () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context, false);
+                  }
+                },
           child: const Text(
             'إلغاء',
             style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontWeight: FontWeight.bold),
@@ -82,7 +94,7 @@ class _UnlinkPatientDialogState extends State<UnlinkPatientDialog> {
         ElevatedButton(
           onPressed: _isLoading ? null : _handleUnlink,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.error, // استخدام اللون الأحمر من الثيم
+            backgroundColor: AppColors.error, 
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           child: _isLoading

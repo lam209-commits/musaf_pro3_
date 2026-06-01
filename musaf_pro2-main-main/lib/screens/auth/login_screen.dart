@@ -1,11 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:musaf_pro/screens/auth/PermissionHandle.dart';
 import '../../services/auth_service.dart';
 
 // استدعاء طبقات المعمارية النظيفة والزر الموحد
 import '../../domain/repositories/auth_repository.dart';
 import '../../data/repositories/firebase_auth_repository_impl.dart';
 import 'package:musaf_pro/widgets/custom_button.dart';
+// 🚀 استدعاء شاشة فحص الصلاحيات
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -42,37 +44,43 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (user != null) {
-        debugPrint("🔵 تسجيل دخول ناجح، جاري جلب بيانات الدور...");
+        debugPrint("🔵 تسجيل دخول ناجح، جاري جلب بيانات الدور والربط...");
         
-        // 2. جلب بيانات المستخدم لمعرفة هل هو مريض أم مرافق
+        // 2. جلب بيانات المستخدم لمعرفة الدور وحالة الربط
         final userEntity = await _authRepository.getUserData(user.uid);
         
         if (mounted) {
-          // 🛑 3. إيقاف دائرة التحميل فوراً
           setState(() => _isLoading = false);
           
-          // 🛑 4. التوجيه الجذري والقوي (يمسح الشاشات المعلقة ويوجه بسلاسة)
-          if (userEntity != null && userEntity.role == 'caregiver') {
-            Navigator.pushNamedAndRemoveUntil(context, '/caregiver_home', (route) => false);
+          if (userEntity == null) {
+            _showSnackBar('تعذر جلب بيانات المستخدم ⚠️');
+            return;
+          }
+
+          // 3. منطق التوجيه الذكي المعدل 🚀
+          // إذا كان الحساب مرافق ولكنه غير مرتبط بعد، نوجهه لشاشة الربط أولاً
+          if (userEntity.role == 'caregiver' && (userEntity.linkedPatientId == null || userEntity.linkedPatientId!.isEmpty)) {
+            Navigator.pushNamedAndRemoveUntil(context, '/pairing', (route) => false);
           } else {
-            Navigator.pushNamedAndRemoveUntil(context, '/patient_home', (route) => false);
+            // إذا كان مريضاً، أو مرافقاً مرتبطاً بالكامل ⬅️ نمرره أولاً عبر بوابة الأذونات المصممة لتأمين التطبيق
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PermissionHandlerWrapper(userType: userEntity.role ?? 'patient'),
+              ),
+              (route) => false,
+            );
           }
         }
       } 
       
     } on FirebaseAuthException catch (e) {
-      // 🛑 إيقاف دائرة التحميل فوراً عند حدوث خطأ
       if (mounted) setState(() => _isLoading = false);
 
-      // 🔍 تحليل نوع الخطأ وعرض رسالة مخصصة للمستخدم:
       if (e.code == 'user-not-found') {
         _showSnackBar('البريد الإلكتروني غير مسجل لدينا ⚠️');
       } else if (e.code == 'wrong-password') {
         _showSnackBar('كلمة المرور غير صحيحة ❌');
-      } else if (e.code == 'invalid-email') {
-        _showSnackBar('صيغة البريد الإلكتروني خاطئة ⚠️');
-      } else if (e.code == 'user-disabled') {
-        _showSnackBar('تم حظر هذا الحساب 🚫');
       } else if (e.code == 'invalid-credential') {
         _showSnackBar('تأكد من صحة البريد الإلكتروني وكلمة المرور ⚠️');
       } else {
@@ -85,16 +93,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _showSnackBar('تأكد من اتصالك بالإنترنت 🌐');
     }
   }
-  
+
   void _showForgotPasswordDialog() {
-    // 💡 سحب الإيميل تلقائياً إذا كان المستخدم قد كتبه في حقل تسجيل الدخول
     final resetEmailController = TextEditingController(text: _emailController.text);
-    bool isResetting = false; // حالة التحميل الخاصة بالنافذة
+    bool isResetting = false;
 
     showDialog(
       context: context,
       builder: (context) {
-        // نستخدم StatefulBuilder لتحديث حالة التحميل داخل النافذة فقط
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return AlertDialog(
@@ -152,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     try {
                       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
                       if (context.mounted) {
-                        Navigator.pop(context); // إغلاق النافذة
+                        Navigator.pop(context);
                         _showSnackBar('تم إرسال رابط استعادة كلمة المرور بنجاح ✅');
                       }
                     } on FirebaseAuthException catch (e) {
@@ -178,17 +184,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
             );
-          }
+          },
         );
-      }
+      },
     );
   }
-   void _showSnackBar(String message) {
+
+  void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'Cairo'))),
     );
   }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -222,9 +230,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 50),
-                  Text(
+                  const Text(
                     'مرحباً بك مجدداً',
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'Cairo'),
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'Cairo'),
                   ),
                   const Text(
                     'سجل دخولك للمتابعة في رحلة الرعاية',
@@ -232,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 40),
 
-                  _buildInputLabel("رقم الجوال أو البريد الإلكتروني"),
+                  _buildInputLabel("   البريد الإلكتروني"),
                   _buildCustomField(
                     controller: _emailController,
                     hint: "example@mail.com",
@@ -255,10 +263,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: (val) => (val == null || val.trim().isEmpty) ? 'حقل كلمة المرور مطلوب ⚠️' : null,
                   ),
 
-                 Align(
+                  Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton(
-                      // 👇 التعديل هنا: استدعاء الدالة الجديدة
                       onPressed: _showForgotPasswordDialog, 
                       child: const Text('نسيت كلمة المرور؟', style: TextStyle(color: Colors.blue, fontFamily: 'Cairo', fontSize: 13)),
                     ),
@@ -321,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
         controller: controller,
         obscureText: isPass,
         textAlign: isPass ? TextAlign.right : TextAlign.left,
-textDirection: TextDirection.ltr,
+        textDirection: TextDirection.ltr,
         validator: validator,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
