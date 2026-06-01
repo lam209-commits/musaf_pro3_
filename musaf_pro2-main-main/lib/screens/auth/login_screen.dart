@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:musaf_pro/core/theme/app_colors.dart';
 import 'package:musaf_pro/screens/auth/PermissionHandle.dart';
 import '../../services/auth_service.dart';
 
@@ -17,6 +18,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // ==========================================
+  // 🛑 المنطق البرمجي (Logic) - لم يتم حذف أو تغيير أي شيء
+  // ==========================================
   final AuthService _auth = AuthService();
   final AuthRepository _authRepository = FirebaseAuthRepositoryImpl();
 
@@ -37,7 +41,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. تسجيل الدخول
       var user = await _auth.signIn(
         _emailController.text.trim(),
         _passController.text.trim(),
@@ -46,7 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user != null) {
         debugPrint("🔵 تسجيل دخول ناجح، جاري جلب بيانات الدور والربط...");
         
-        // 2. جلب بيانات المستخدم لمعرفة الدور وحالة الربط
         final userEntity = await _authRepository.getUserData(user.uid);
         
         if (mounted) {
@@ -57,12 +59,9 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
 
-          // 3. منطق التوجيه الذكي المعدل 🚀
-          // إذا كان الحساب مرافق ولكنه غير مرتبط بعد، نوجهه لشاشة الربط أولاً
           if (userEntity.role == 'caregiver' && (userEntity.linkedPatientId == null || userEntity.linkedPatientId!.isEmpty)) {
             Navigator.pushNamedAndRemoveUntil(context, '/pairing', (route) => false);
           } else {
-            // إذا كان مريضاً، أو مرافقاً مرتبطاً بالكامل ⬅️ نمرره أولاً عبر بوابة الأذونات المصممة لتأمين التطبيق
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(
@@ -114,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة',
+                    'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة.',
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 13, height: 1.5),
                   ),
                   const SizedBox(height: 15),
@@ -122,6 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: resetEmailController,
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.right, // توجيه النص لليمين
                     decoration: InputDecoration(
                       hintText: 'example@mail.com',
                       filled: true,
@@ -193,7 +193,20 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'Cairo'))),
+      SnackBar(
+        content: Text(
+          message, 
+          textAlign: TextAlign.right, 
+          style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: AppColors.error, // 👈 اللون الأحمر الخاص بتطبيقك
+        behavior: SnackBarBehavior.floating, // 👈 يجعل الرسالة تطفو بشكل أنيق
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10), // 👈 حواف دائرية تتناسب مع تصميمك
+        ),
+        margin: const EdgeInsets.all(15), // 👈 إبعادها عن الحواف قليلاً
+        duration: const Duration(seconds: 3), // مدة ظهور الرسالة
+      ),
     );
   }
 
@@ -204,95 +217,125 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ==========================================
+  // 🎨 واجهة المستخدم (UI) 
+  // ==========================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: Colors.white, // خلفية بيضاء نقية
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 25.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 40),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_box_rounded, color: musafRed, size: 30),
-                      const SizedBox(width: 5),
-                      Text(
-                        'مُسعف',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: musafRed, fontFamily: 'Cairo'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 50),
-                  const Text(
-                    'مرحباً بك مجدداً',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'Cairo'),
-                  ),
-                  const Text(
-                    'سجل دخولك للمتابعة في رحلة الرعاية',
-                    style: TextStyle(color: Colors.grey, fontSize: 14, fontFamily: 'Cairo'),
-                  ),
-                  const SizedBox(height: 40),
-
-                  _buildInputLabel("   البريد الإلكتروني"),
-                  _buildCustomField(
-                    controller: _emailController,
-                    hint: "example@mail.com",
-                    icon: Icons.alternate_email,
-                    validator: (val) => (val == null || val.trim().isEmpty) ? 'هذا الحقل مطلوب ⚠️' : null,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  _buildInputLabel("كلمة المرور"),
-                  _buildCustomField(
-                    controller: _passController,
-                    hint: "........",
-                    icon: Icons.lock_outline,
-                    isPass: _isObscurePass,
-                    suffixIcon: IconButton(
-                      icon: Icon(_isObscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey, size: 20),
-                      onPressed: () => setState(() => _isObscurePass = !_isObscurePass),
-                    ),
-                    validator: (val) => (val == null || val.trim().isEmpty) ? 'حقل كلمة المرور مطلوب ⚠️' : null,
-                  ),
-
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: _showForgotPasswordDialog, 
-                      child: const Text('نسيت كلمة المرور؟', style: TextStyle(color: Colors.blue, fontFamily: 'Cairo', fontSize: 13)),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  _isLoading
-                      ? CircularProgressIndicator(color: musafRed)
-                      : CustomButton(
-                          text: 'تسجيل الدخول',
-                          isPrimary: true,
-                          backgroundColor: musafRed,
-                          onPressed: _handleLogin,
+        child: Directionality(
+          textDirection: TextDirection.rtl, // إجبار الواجهة على الاتجاه العربي
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 25.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start, // محاذاة العناصر لليمين
+                  children: [
+                    const SizedBox(height: 20),
+                    
+                    // 🚀 إضافة الشعار هنا في أعلى الشاشة
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center, // لجعل الشعار في المنتصف
+                      children: [
+                        Icon(Icons.add_box_rounded, color: musafRed, size: 35),
+                        const SizedBox(width: 8),
+                        Text(
+                          'مُسعف',
+                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: musafRed, fontFamily: 'Cairo'),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 40),
+                    
+                    // العناوين العلوية
+                    const Text(
+                      'تسجيل الدخول',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'Cairo'),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'أدخل تفاصيل حساب مُسعف الخاص بك.',
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 15, fontFamily: 'Cairo'),
+                    ),
+                    const SizedBox(height: 40),
 
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pushNamed(context, '/role_selection'),
-                        child: Text('إنشاء حساب جديد', style: TextStyle(color: musafRed, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 14)),
+                    // حقل البريد الإلكتروني
+                    _buildInputLabel("البريد الإلكتروني"),
+                    _buildCustomField(
+                      controller: _emailController,
+                      hint: "example@mail.com",
+                      isEmail: true, // تفعيل الاتجاه العربي للإيميل
+                      validator: (val) => (val == null || val.trim().isEmpty) ? 'هذا الحقل مطلوب ⚠️' : null,
+                    ),
+
+                    const SizedBox(height: 25),
+
+                    // حقل كلمة المرور
+                    _buildInputLabel("كلمة السر"),
+                    _buildCustomField(
+                      controller: _passController,
+                      hint: "••••••••",
+                      isPass: _isObscurePass,
+                      isPasswordField: true,
+                      suffixIcon: IconButton(
+                        icon: Icon(_isObscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.black54, size: 22),
+                        onPressed: () => setState(() => _isObscurePass = !_isObscurePass),
                       ),
-                      const Text('مستخدم جديد؟', style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
-                    ],
-                  ),
-                ],
+                      validator: (val) => (val == null || val.trim().isEmpty) ? 'حقل كلمة المرور مطلوب ⚠️' : null,
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // زر نسيت كلمة المرور (على اليسار)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _showForgotPasswordDialog, 
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                        child: const Text('نسيت كلمة المرور؟', style: TextStyle(color: Colors.grey, fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 35),
+
+                    // زر تسجيل الدخول
+                    _isLoading
+                        ? Center(child: CircularProgressIndicator(color: musafRed))
+                        : SizedBox(
+                            width: double.infinity,
+                            height: 55, // زر كبير وواضح
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: musafRed,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                              ),
+                              onPressed: _handleLogin,
+                              child: const Text('تسجيل الدخول', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+
+                    const SizedBox(height: 30),
+                    
+                    // رابط إنشاء الحساب السفلي
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('جديد في مُسعف؟', style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.black87)),
+                        TextButton(
+                          onPressed: () => Navigator.pushNamed(context, '/role_selection'),
+                          child: Text('إنشاء حساب', style: TextStyle(color: musafRed, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 14, decoration: TextDecoration.underline, decorationColor: musafRed)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
           ),
@@ -301,45 +344,62 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // دالة مساعدة لإنشاء العناوين (Labels)
   Widget _buildInputLabel(String label) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, fontFamily: 'Cairo', color: Colors.black87)),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0, right: 4.0),
+      child: Text(
+        label, 
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Cairo', color: Colors.black87),
       ),
     );
   }
 
+  // دالة مساعدة لإنشاء الحقول بتصميم الـ Outline
   Widget _buildCustomField({
     required TextEditingController controller,
     required String hint,
-    required IconData icon,
     bool isPass = false,
+    bool isEmail = false,
+    bool isPasswordField = false,
     Widget? suffixIcon,
     required String? Function(String?) validator,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextFormField(
-        controller: controller,
-        obscureText: isPass,
-        textAlign: isPass ? TextAlign.right : TextAlign.left,
-        textDirection: TextDirection.ltr,
-        validator: validator,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(color: Colors.black54, fontSize: 13, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-          prefixIcon: Icon(icon, color: Colors.grey),
-          suffixIcon: suffixIcon,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-          border: InputBorder.none,
+    return TextFormField(
+      controller: controller,
+      obscureText: isPass,
+      // 🚀 إعدادات الاتجاه العربي للحقول
+      textAlign: TextAlign.right, // يبدأ الكتابة من اليمين
+      textDirection: isEmail ? TextDirection.ltr : null, // يحافظ على الحروف الإنجليزية صحيحة للإيميل
+      validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.grey, fontSize: 14, fontFamily: 'Cairo'),
+        suffixIcon: suffixIcon, // أيقونة العين ستظهر على اليسار تلقائياً بسبب الـ Directionality RTL
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        
+        // تصميم الحواف العادية (غير مفعل)
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade400, width: 1.0),
+        ),
+        
+        // تصميم الحواف عند التركيز (مفعل) بلون التطبيق
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: musafRed, width: 2.0),
+        ),
+        
+        // تصميم حواف الخطأ
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.red, width: 1.0),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.red, width: 2.0),
         ),
       ),
     );
