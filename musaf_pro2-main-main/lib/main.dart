@@ -25,7 +25,6 @@ import 'package:musaf_pro/screens/auth/login_screen.dart';
 import 'package:musaf_pro/screens/auth/register_screen.dart';
 import 'package:musaf_pro/screens/auth/pairing_code_screen.dart';
 import 'package:musaf_pro/screens/auth/health_data_screen.dart';
-import 'package:musaf_pro/screens/auth/patient_register_screen.dart';
 import 'package:musaf_pro/screens/patient_home_screen.dart';
 import 'package:musaf_pro/screens/health_vitals_screen.dart';
 import 'package:musaf_pro/screens/medications_screen.dart';
@@ -76,7 +75,6 @@ class MyApp extends StatelessWidget {
         '/role_selection': (context) => const RoleSelectionScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        '/patient_register': (context) => const PatientRegisterScreen(),
         '/pairing': (context) => const PairingCodeScreen(),
         '/health_data': (context) => const HealthDataScreen(),
         '/health_vitals': (context) => const HealthVitalsScreen(),
