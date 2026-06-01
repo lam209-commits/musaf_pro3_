@@ -42,6 +42,8 @@ class FirebaseAuthRepositoryImpl implements AuthRepository {
         isCaregiverVerified: user.isCaregiverVerified,
         linkedPatientId: user.linkedPatientId,
         linkedPatientName: user.linkedPatientName,
+        patientVerificationCode: user.patientVerificationCode,
+        isEmailVerified: user.isEmailVerified,
       );
       
       await _firestore
@@ -148,33 +150,52 @@ class FirebaseAuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> deleteUserAccountSecurely(String currentPassword) async {
-    try {
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null && user.email != null) {
+ Future<void> deleteUserAccountSecurely(String currentPassword) async {
+  try {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      
+      // 1. إعادة المصادقة (خطوة ضرورية جداً للحذف الأمني)
+      AuthCredential credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+      await user.reauthenticateWithCredential(credential);
+
+      // 2. 🚀 منطق التنظيف التلقائي (فك الارتباط قبل الحذف)
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
+      if (userDoc.exists) {
+        Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
         
-        AuthCredential credential = EmailAuthProvider.credential(
-          email: user.email!,
-          password: currentPassword,
-        );
-        await user.reauthenticateWithCredential(credential);
+        // إذا كان المستخدم مرافقاً ومرتبطاً بمريض
+        String? linkedPatientId = userData?['linkedPatientId'];
+        if (linkedPatientId != null && linkedPatientId.isNotEmpty) {
+          // فك الارتباط من طرف المريض (حذف معرف المرافق من بيانات المريض)
+          await _firestore.collection('users').doc(linkedPatientId).update({
+            'linkedPatientId': FieldValue.delete(), 
+            // إذا كان لديك حقول أخرى مثل 'caregiverEmail' يجب حذفها أيضاً
+          });
+        }
+      }
 
-        await _firestore.collection('users').doc(user.uid).delete();
-        await user.delete();
-      }
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password') {
-        throw Exception("كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى.");
-      } else if (e.code == 'network-request-failed') {
-         throw Exception("تأكد من اتصالك بالإنترنت.");
-      } else {
-        throw Exception("حدث خطأ أثناء المصادقة: ${e.message}");
-      }
-    } catch (e) {
-      throw Exception("حدث خطأ غير متوقع أثناء الحذف.");
+      // 3. حذف بيانات المستخدم من Firestore
+      await _firestore.collection('users').doc(user.uid).delete();
+      
+      // 4. حذف الحساب نهائياً من Firebase Auth
+      await user.delete();
     }
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'wrong-password') {
+      throw Exception("كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى.");
+    } else if (e.code == 'network-request-failed') {
+      throw Exception("تأكد من اتصالك بالإنترنت.");
+    } else {
+      throw Exception("حدث خطأ أثناء المصادقة: ${e.message}");
+    }
+  } catch (e) {
+    throw Exception("حدث خطأ غير متوقع أثناء الحذف.");
   }
-
+}
   @override
   Future<void> uploadProfileImage(String currentUserId, String imagePath) async {
     try {

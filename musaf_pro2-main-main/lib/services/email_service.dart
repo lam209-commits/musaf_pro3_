@@ -31,4 +31,26 @@ class EmailService {
       // تم حذف rethrow هنا لضمان عدم تعليق مؤشر التحميل في صفحة تسجيل المريض
     }
   }
+  static Future<void> sendPatientVerificationCode({
+    required String toEmail,
+    required String verificationCode,
+  }) async {
+    // إعداد سيرفر Gmail المباشر
+    final smtpServer = gmail(_userEmail, _appPassword);
+
+    // تجهيز محتوى رسالة المريض
+    final message = Message()
+      ..from = const Address(_userEmail, 'تطبيق مُسعف')
+      ..recipients.add(toEmail) // إيميل المريض
+      ..subject = 'كود التحقق من بريدك الإلكتروني - مُسعف 🛡️'
+      ..text = 'مرحباً،\n\nأهلاً بك في تطبيق مُسعف.\n\nكود التحقق الخاص بك هو: $verificationCode\n\nيرجى إدخال هذا الكود في التطبيق لتأكيد حسابك والبدء بإعداد ملفك الصحي.\n\nنتمنى لك دوام الصحة والعافية،\nفريق مُسعف';
+
+    try {
+      await send(message, smtpServer);
+      print('✅ تم إرسال كود التحقق للمريض بنجاح!');
+    } catch (e) {
+      print('❌ فشل إرسال كود تحقق المريض: $e');
+    }
+  }
 }
+

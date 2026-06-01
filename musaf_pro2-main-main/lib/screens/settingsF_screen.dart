@@ -224,7 +224,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
             ]),
 
             const SizedBox(height: 25),
-            _buildSectionTitle("منطقة الخطر", color: Colors.redAccent),
+            _buildSectionTitle(" حذف الحساب ", color: Colors.redAccent),
             Container(
               margin: const EdgeInsets.only(bottom: 40),
               decoration: BoxDecoration(
@@ -235,8 +235,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
               ),
               child: Column(
                 children: [
-                  _buildSettingsTile(Icons.pause_circle_outline_rounded, "تعطيل الحساب مؤقتاً", color: Colors.orange[700], onTap: () {}),
-                  const Divider(height: 1, indent: 50),
+                  
                   _buildSettingsTile(Icons.delete_forever_rounded, "حذف الحساب نهائياً", color: Colors.red, onTap: () => _handleDeleteRequest()),
                 ],
               ),
@@ -325,43 +324,17 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
   }
 
   // 🚀 التعديل: استدعاء نافذة الحذف الجديدة بدلاً من المنطق المدمج
-  void _handleDeleteRequest() {
-    if (currentPatientId.isNotEmpty) {
-      _showCannotDeleteDialog();
-    } else {
-      showDialog(
-        context: context,
-        builder: (ctx) => DeleteAccountDialog(authRepository: _authRepository),
-      );
-    }
-  }
-
-  void _showCannotDeleteDialog() {
-    showDialog(
-      context: context,
-      builder: (d) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 10),
-            Text("لا يمكن حذف الحساب", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 18)),
-          ],
-        ),
-        content: const Text(
-          "يوجد تابع مرتبط بحسابك حالياً.\nيجب نقل الإشراف إلى مرافق آخر أو إزالة الارتباط أولاً لضمان سلامة التابع واستمرار التنبيهات.", 
-          style: TextStyle(fontFamily: 'Cairo', fontSize: 14, height: 1.5)
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: themeColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () => Navigator.pop(d), 
-            child: const Text("حسناً، فهمت", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white))
-          ),
-        ],
-      )
-    );
-  }
+ void _handleDeleteRequest() {
+  // 🚀 التعديل: قمنا بإزالة الشرط (if) الذي كان يمنع الحذف إذا كان هناك مريض مرتبط.
+  // الآن، الحذف متاح دائماً، والـ Repository سيتولى "التنظيف" خلف الكواليس.
+  
+  showDialog(
+    context: context,
+    builder: (ctx) => DeleteAccountDialog(
+      authRepository: _authRepository, // نستخدم الـ Repository الموجود مسبقاً في الشاشة
+    ),
+  );
+}
 
   // --- النوافذ المنبثقة لقسم الحساب ---
 

@@ -26,11 +26,12 @@ import 'package:musaf_pro/screens/auth/register_screen.dart';
 import 'package:musaf_pro/screens/auth/pairing_code_screen.dart';
 import 'package:musaf_pro/screens/auth/health_data_screen.dart';
 import 'package:musaf_pro/screens/auth/patient_register_screen.dart';
-import 'package:musaf_pro/screens/auth/caregiver_register_screen.dart';
 import 'package:musaf_pro/screens/patient_home_screen.dart';
 import 'package:musaf_pro/screens/health_vitals_screen.dart';
 import 'package:musaf_pro/screens/medications_screen.dart';
 import 'package:musaf_pro/screens/daily_medications_list_screen.dart';
+// تأكدي من كتابة المسار الصحيح للملف حسب مجلدات مشروعك
+import 'screens/patient_verification_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -76,7 +77,6 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/patient_register': (context) => const PatientRegisterScreen(),
-        '/caregiver_register': (context) => const CaregiverRegisterScreen(),
         '/pairing': (context) => const PairingCodeScreen(),
         '/health_data': (context) => const HealthDataScreen(),
         '/health_vitals': (context) => const HealthVitalsScreen(),
@@ -84,6 +84,7 @@ class MyApp extends StatelessWidget {
         '/daily_medications': (context) => const DailyMedicationsListScreen(),
         '/patient_home': (context) => const PatientHomeScreen(),
         '/home': (context) => const MainDashboardScreen(),
+        '/patient_verification': (context) => const PatientVerificationScreen(),
       },
       onGenerateRoute: (settings) {
         final String patientId = settings.arguments is String ? settings.arguments as String : "user_123";

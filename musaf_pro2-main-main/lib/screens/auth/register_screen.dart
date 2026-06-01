@@ -133,10 +133,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // 🚀 [تعديل هام]: توليد كود آمن تماماً من 6 أرقام لتجنب أي احتمالية للربط الخاطئ
       String? generatedPairingCode = userRole == 'patient' 
           ? (Random.secure().nextInt(900000) + 100000).toString() 
+
+          : null;
+          // 🚀 توليد كود للمريض نفسه (للتحقق من إيميله)
+      String? patientVerificationCode = userRole == 'patient' 
+          ? (Random.secure().nextInt(900000) + 100000).toString() 
           : null;
 
       // 5. تجهيز هيكل البيانات (UserEntity)
-      UserEntity newUserEntity = UserEntity(
+     UserEntity newUserEntity = UserEntity(
         uid: uid,
         displayName: _nameController.text.trim(),
         phoneNumber: fullPhoneNumber,
@@ -144,7 +149,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: enteredEmail,
         caregiverEmail: userRole == 'patient' ? caregiverEmail : null,
         relation: userRole == 'patient' ? _selectedRelation : null,
-        pairingCode: generatedPairingCode,
+        pairingCode: generatedPairingCode, // الكود الذي سيذهب للمرافق
+        patientVerificationCode: patientVerificationCode, // 👈 الكود الذي سيذهب للمريض
+        isEmailVerified: userRole == 'patient' ? false : null, // 👈 حالة تحقق إيميل المريض
         isCaregiverVerified: userRole == 'patient' ? false : null,
         linkedPatientId: userRole == 'caregiver' ? linkedPatientId : null,
         linkedPatientName: userRole == 'caregiver' ? linkedPatientName : null,
@@ -160,14 +167,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       // 7. إرسال الإيميلات والتوجيه
+      // 7. إرسال الإيميلات والتوجيه
       if (userRole == 'patient') {
-        // إرسال الكود لإيميل المرافق
+        // 1. إرسال كود الربط لإيميل المرافق
         await EmailService.sendPairingCode(
           toEmail: newUserEntity.caregiverEmail!,
           pairingCode: newUserEntity.pairingCode!,
         );
-        // المريض ينتقل لصفحة إكمال بياناته الصحية
-        if (mounted) Navigator.pushReplacementNamed(context, '/health_data'); 
+        
+        // 2. 👈 إرسال كود التحقق لإيميل المريض الشخصي
+        await EmailService.sendPatientVerificationCode(
+          toEmail: newUserEntity.email,
+          verificationCode: patientVerificationCode!, 
+        );
+
+        // 3. 👈 التوجيه: بدلاً من الذهاب لمعلوماته الصحية مباشرة، نوجهه لشاشة التحقق من الإيميل!
+        if (mounted) Navigator.pushReplacementNamed(context, '/patient_verification'); 
         
       } else if (userRole == 'caregiver') {
         // المرافق ينتقل لصفحة إدخال الكود
@@ -277,7 +292,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               
               if (userRole == 'patient') ...[
                 const SizedBox(height: 15),
-                _buildFieldLabel("بريد المرافق (لإرسال الكود)", Icons.alternate_email_rounded),
+                _buildFieldLabel("بريد المرافق ( للربط )", Icons.alternate_email_rounded),
                 _buildCustomTextField(
                   controller: _caregiverEmailController, 
                   hint: "caregiver@mail.com",

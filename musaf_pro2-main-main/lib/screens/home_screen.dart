@@ -49,79 +49,82 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initializeCaregiverData() async {
     final uid = widget.caregiverId ?? currentUserId;
-    if (uid != null) {
-      try {
-        var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        if (userDoc.exists && mounted) {
-          setState(() {
-            caregiverName = userDoc.data()?['displayName'] ?? "المرافق";
-            caregiverImageUrl = userDoc.data()?['profileImageUrl'] ?? ""; 
-            currentPatientId = userDoc.data()?['linkedPatientId'] ?? "";
-          });
-          
-          if (currentPatientId.isNotEmpty) {
-            var patientDoc = await FirebaseFirestore.instance.collection('users').doc(currentPatientId).get();
-            if (patientDoc.exists && mounted) {
-              setState(() {
-                linkedPatientName = patientDoc.data()?['displayName'] ?? "التابع";
-              });
-              _saveFamilyTokenToPatient(); 
-            } else {
-              if (mounted) setState(() => linkedPatientName = "لم يتم العثور على بيانات التابع");
-            }
+    
+    if (uid == null) {
+      if (mounted) setState(() => isLoadingData = false);
+      return;
+    }
 
-            final pro = context.read<LocationProvider>();
-            // 👈 7. حماية إضافية قبل التحميل
-            if (currentPatientId.isNotEmpty) {
-              await pro.loadSafeZones(currentPatientId);
-            }
-            
-            // 👈 1. حفظ الـ listener في المتغير
-            _alertsSubscription = FirebaseFirestore.instance
-                .collection('patients')
-                .doc(currentPatientId)
-                .collection('alerts')
-                .where('is_read', isEqualTo: false)
-                .snapshots()
-                .listen((snapshot) {
-              if (mounted) setState(() => unreadAlertsCount = snapshot.docs.length);
+    try {
+      var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      
+      if (userDoc.exists && mounted) {
+        setState(() {
+          caregiverName = userDoc.data()?['displayName'] ?? "المرافق";
+          caregiverImageUrl = userDoc.data()?['profileImageUrl'] ?? ""; 
+          currentPatientId = userDoc.data()?['linkedPatientId'] ?? "";
+        });
+        
+        // إذا كان هناك مريض مرتبط، نقوم بجلب بياناته
+        if (currentPatientId.isNotEmpty) {
+          var patientDoc = await FirebaseFirestore.instance.collection('users').doc(currentPatientId).get();
+          if (patientDoc.exists && mounted) {
+            setState(() {
+              linkedPatientName = patientDoc.data()?['displayName'] ?? "التابع";
             });
-
-            // 👈 1. حفظ الـ listener في المتغير
-            _zonesSubscription = FirebaseFirestore.instance
-                .collection('patients')
-                .doc(currentPatientId)
-                .collection('safe_zones')
-                .snapshots()
-                .listen((snapshot) {
-              if (mounted) {
-                setState(() {
-                  hasSafeZones = snapshot.docs.isNotEmpty;
-                });
-              }
-            });
-
-            if (mounted) setState(() => isLoadingData = false);
+            _saveFamilyTokenToPatient(); 
           } else {
+            if (mounted) setState(() => linkedPatientName = "لم يتم العثور على بيانات التابع");
+          }
+
+          final pro = context.read<LocationProvider>();
+          if (currentPatientId.isNotEmpty) {
+            await pro.loadSafeZones(currentPatientId);
+          }
+          
+          _alertsSubscription = FirebaseFirestore.instance
+              .collection('patients')
+              .doc(currentPatientId)
+              .collection('alerts')
+              .where('is_read', isEqualTo: false)
+              .snapshots()
+              .listen((snapshot) {
+            if (mounted) setState(() => unreadAlertsCount = snapshot.docs.length);
+          });
+
+          _zonesSubscription = FirebaseFirestore.instance
+              .collection('patients')
+              .doc(currentPatientId)
+              .collection('safe_zones')
+              .snapshots()
+              .listen((snapshot) {
             if (mounted) {
               setState(() {
-                linkedPatientName = "لم تقم بربط تابع حتى الآن";
-                isLoadingData = false;
+                hasSafeZones = snapshot.docs.isNotEmpty;
               });
             }
+          });
+
+          // إنهاء التحميل وإظهار الشاشة الرئيسية بعد جلب البيانات
+          if (mounted) setState(() => isLoadingData = false);
+
+        } else {
+          // 🚀 السطر السحري الجديد: التوجيه الإجباري والمباشر لشاشة الربط
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/pairing');
           }
         }
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            linkedPatientName = "خطأ في جلب البيانات";
-            isLoadingData = false;
-          });
-        }
+      }
+    } catch (e) {
+      debugPrint("خطأ في جلب بيانات المستخدم: $e");
+      if (mounted) {
+        setState(() {
+          linkedPatientName = "خطأ في الاتصال";
+          isLoadingData = false;
+        });
       }
     }
   }
-
   // 👈 2. تعديل دالة رفع الصورة لاستخدام Firebase Storage
   Future<void> _pickAndUploadProfileImage() async {
     final ImagePicker picker = ImagePicker();
