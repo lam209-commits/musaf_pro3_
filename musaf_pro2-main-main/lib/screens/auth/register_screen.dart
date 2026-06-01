@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:musaf_pro/core/theme/app_colors.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/email_service.dart';
@@ -39,6 +40,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _isLoading = false;
   final Color primaryRed = const Color(0xFFB7131A);
+  bool get isPatient => userRole == 'patient';
+Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
+
   String? userRole;
 
   // متغيرات التحكم في إظهار وإخفاء كلمة السر (العين)
@@ -236,8 +240,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: primaryRed),
-          onPressed: () => Navigator.pop(context),
+icon: Icon(
+    Icons.arrow_back, 
+    // الشرط: إذا كان المريض (userRole == 'patient') استخدم الأحمر، وإلا استخدم لون المرافق (AppColors.primary)
+    color: userRole == 'patient' ?primaryRed : AppColors.primary, 
+  ),           onPressed: () => Navigator.pop(context), // لون المرافق الثابت          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           userRole == 'patient' ? 'تسجيل مريض' : 'تسجيل مرافق',
@@ -348,14 +355,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               
               const SizedBox(height: 40),
               
-              _isLoading
-                  ? CircularProgressIndicator(color: primaryRed)
-                  : CustomButton(
-                      text: userRole == 'patient' ? 'إنشاء حساب ومتابعة' : 'إنشاء حساب مرافق',
-                      isPrimary: true,
-                      onPressed: _handleRegister,
-                    ),
-              const SizedBox(height: 30),
+            _isLoading
+    ? CircularProgressIndicator(color: buttonColor)
+    : CustomButton(
+        text: isPatient ? 'إنشاء حساب ومتابعة' : 'إنشاء حساب مرافق',
+        isPrimary: true,
+        backgroundColor: buttonColor, // الزر سيتلون تلقائياً (أحمر للمريض، بنفسجي للمرافق)
+        onPressed: _handleRegister,
+      ),
+const SizedBox(height: 30),
             ],
           ),
         ),
