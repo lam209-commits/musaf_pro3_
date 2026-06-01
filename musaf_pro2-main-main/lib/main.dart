@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:permission_handler/permission_handler.dart'; 
 import 'package:shared_preferences/shared_preferences.dart'; // 👈 ضروري لفحص شاشة الترحيب
 
 import 'firebase_options.dart';
@@ -13,8 +12,10 @@ import 'package:musaf_pro/services/notification_service.dart';
 import 'package:musaf_pro/providers/location_provider.dart';
 import 'package:musaf_pro/data/repositories/firebase_zone_repository.dart';
 
-// 🚀 استدعاء AuthWrapper الذي صنعناه مسبقاً (تأكدي من المسار الصحيح)
+// 🚀 استدعاء AuthWrapper الذي صنعناه مسبقاً
 import 'package:musaf_pro/screens/auth/auth_wrapper.dart'; 
+// 🚀 استدعاء ملف الأذونات المستقل (بدلاً من كتابته في الأسفل)
+import 'package:musaf_pro/screens/auth/PermissionHandle.dart'; 
 
 import 'package:musaf_pro/screens/home_screen.dart' as caregiver_home;
 import 'package:musaf_pro/screens/main_dashboardF_screen.dart';
@@ -66,7 +67,7 @@ class MyApp extends StatelessWidget {
       title: 'مُسعف',
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Almarai', // يمكنكِ تغييره إلى Cairo إذا أردتِ توحيد الخطوط
+        fontFamily: 'Cairo', // توحيد الخط 
         primarySwatch: Colors.red,
         scaffoldBackgroundColor: Colors.white,
       ),
@@ -78,11 +79,14 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/pairing': (context) => const PairingCodeScreen(),
+        '/patient_verification': (context) => const PatientVerificationScreen(),
         '/health_data': (context) => const HealthDataScreen(),
         '/health_vitals': (context) => const HealthVitalsScreen(),
         '/medications': (context) => const MedicationsScreen(),
         '/daily_medications': (context) => const DailyMedicationsListScreen(),
-'/home': (context) => const PermissionHandlerWrapper(userType: 'caregiver'),
+        
+        // 🚀 التوجيه عبر شاشة الأذونات الذكية المستقلة التي صممناها
+        '/home': (context) => const PermissionHandlerWrapper(userType: 'caregiver'),
         '/patient_home': (context) => const PermissionHandlerWrapper(userType: 'patient'),
       },
       onGenerateRoute: (settings) {
@@ -132,61 +136,5 @@ class AppInitGate extends StatelessWidget {
         return hasSeenOnboarding ? const AuthWrapper() : const OnboardingScreen();
       },
     );
-  }
-}
-
-// 🚀 تم تحسين شاشة الأذونات لتكون "غلافاً" حقيقياً لا يخرب سجل التنقل
-class PermissionHandlerWrapper extends StatefulWidget {
-  const PermissionHandlerWrapper({super.key, required String userType});
-  @override
-  State<PermissionHandlerWrapper> createState() => _PermissionHandlerWrapperState();
-}
-
-class _PermissionHandlerWrapperState extends State<PermissionHandlerWrapper> {
-  bool _isGranted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPermissions());
-  }
-
-  Future<void> _checkPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [Permission.location, Permission.notification].request();
-    if (statuses[Permission.location]!.isDenied || statuses[Permission.notification]!.isDenied) {
-      if (mounted) _showPermissionDialog();
-    } else {
-      if (mounted) setState(() => _isGranted = true);
-    }
-  }
-
-  void _showPermissionDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("أذونات التشغيل"),
-        content: const Text("يرجى السماح بالوصول للموقع والإشعارات لعمل التطبيق بشكل صحيح."),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context); // إغلاق النافذة
-              await [Permission.location, Permission.notification].request();
-              // تحديث الحالة لتشغيل الواجهة
-              if (mounted) setState(() => _isGranted = true); 
-            },
-            child: const Text("موافق"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 🚀 عرض الداشبورد مباشرة بدون Navigator.push لتجنب الشاشة السوداء
-    return _isGranted 
-        ? const MainDashboardScreen() 
-        : const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

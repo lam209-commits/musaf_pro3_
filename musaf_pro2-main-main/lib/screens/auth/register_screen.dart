@@ -76,23 +76,18 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
 
   // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل
  // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل (نسخة آمنة ومحسنة)
+ // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل (نسخة آمنة ومحسنة)
   Future<void> _handleRegister() async {
-    // 1. التحقق من الحقول الأساسية
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    // 2. التحقق من صلة القرابة إذا كان المستخدم مريضاً
     if (userRole == 'patient' && _selectedRelation == null) {
       _showErrorSnackBar('يرجى تحديد صلة القرابة للمرافق ⚠️');
       return;
     }
 
-    // 🚀 [تعديل هام]: تحويل الإيميلات إلى حروف صغيرة لمنع مشاكل التكرار في قاعدة البيانات
     String enteredEmail = _emailController.text.trim().toLowerCase();
     String caregiverEmail = _caregiverEmailController.text.trim().toLowerCase();
 
-    // 🚀 [تعديل هام]: منع المريض من وضع إيميله الشخصي كإيميل للمرافق
     if (userRole == 'patient' && enteredEmail == caregiverEmail) {
       _showErrorSnackBar('لا يمكن استخدام نفس البريد للمريض والمرافق ⚠️');
       return;
@@ -108,13 +103,8 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
       String? linkedPatientId;
       String? linkedPatientName; 
 
-      debugPrint("🔵 بدأنا التسجيل النظيف بدور: $userRole");
-
-      // 3. إذا كان مرافقاً، نتحقق أولاً هل أضافه مريض أم لا
       if (userRole == 'caregiver') {
-        debugPrint("🔵 استدعاء المستودع للبحث عن التابع بالسيرفر...");
         final patientEntity = await _authRepository.findPatientByCaregiverEmail(enteredEmail);
-
         if (patientEntity == null) {
           _showErrorSnackBar('❌ هذا البريد غير مصرح له! يجب أن يضيفك المريض أولاً');
           setState(() => _isLoading = false);
@@ -125,7 +115,7 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
         }
       }
 
-      // 4. إنشاء الحساب المباشر في Firebase Auth
+      // 1. إنشاء الحساب المباشر في Firebase Auth
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: enteredEmail,
         password: password,
@@ -133,18 +123,16 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
 
       String uid = userCredential.user!.uid;
 
-      // 🚀 [تعديل هام]: توليد كود آمن تماماً من 6 أرقام لتجنب أي احتمالية للربط الخاطئ
       String? generatedPairingCode = userRole == 'patient' 
           ? (Random.secure().nextInt(900000) + 100000).toString() 
-
           : null;
-          // 🚀 توليد كود للمريض نفسه (للتحقق من إيميله)
+          
       String? patientVerificationCode = userRole == 'patient' 
           ? (Random.secure().nextInt(900000) + 100000).toString() 
           : null;
 
-      // 5. تجهيز هيكل البيانات (UserEntity)
-     UserEntity newUserEntity = UserEntity(
+      // 2. تجهيز هيكل البيانات
+      UserEntity newUserEntity = UserEntity(
         uid: uid,
         displayName: _nameController.text.trim(),
         phoneNumber: fullPhoneNumber,
@@ -152,61 +140,67 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
         email: enteredEmail,
         caregiverEmail: userRole == 'patient' ? caregiverEmail : null,
         relation: userRole == 'patient' ? _selectedRelation : null,
-        pairingCode: generatedPairingCode, // الكود الذي سيذهب للمرافق
-        patientVerificationCode: patientVerificationCode, // 👈 الكود الذي سيذهب للمريض
-        isEmailVerified: userRole == 'patient' ? false : null, // 👈 حالة تحقق إيميل المريض
+        pairingCode: generatedPairingCode,
+        patientVerificationCode: patientVerificationCode,
+        isEmailVerified: userRole == 'patient' ? false : null,
         isCaregiverVerified: userRole == 'patient' ? false : null,
         linkedPatientId: userRole == 'caregiver' ? linkedPatientId : null,
         linkedPatientName: userRole == 'caregiver' ? linkedPatientName : null,
       );
 
-      // 6. حفظ البيانات في Firestore مع حماية التراجع (Rollback)
+      // 3. حفظ البيانات في Firestore
       try {
         await _authRepository.saveUserData(newUserEntity);
       } catch (e) {
-        // 🚀 [تعديل هام]: إذا فشل الحفظ في Firestore، نحذف حساب Auth لمنع الحسابات اليتيمة
-        await userCredential.user?.delete();
+        await userCredential.user?.delete(); // تراجع
         throw Exception('فشل حفظ بيانات المستخدم في قاعدة البيانات، تم التراجع');
       }
 
-      // 7. إرسال الإيميلات والتوجيه
-      // 7. إرسال الإيميلات والتوجيه
+      // 4. إرسال الإيميلات (مع حماية التراجع إذا فشل الإرسال)
       if (userRole == 'patient') {
-        // 1. إرسال كود الربط لإيميل المرافق
-        await EmailService.sendPairingCode(
-          toEmail: newUserEntity.caregiverEmail!,
-          pairingCode: newUserEntity.pairingCode!,
-        );
-        
-        // 2. 👈 إرسال كود التحقق لإيميل المريض الشخصي
-        await EmailService.sendPatientVerificationCode(
-          toEmail: newUserEntity.email,
-          verificationCode: patientVerificationCode!, 
-        );
+        try {
+          // 💡 [مساعدة للتطوير]: طباعة الأكواد في الـ Terminal لكي تنسخيها وتكملي الاختبار 
+          debugPrint("============== الأكواد السرية للتطوير ==============");
+          debugPrint("🔑 كود تحقق المريض: $patientVerificationCode");
+          debugPrint("🔑 كود ربط المرافق: $generatedPairingCode");
+          debugPrint("=================================================");
 
-        // 3. 👈 التوجيه: بدلاً من الذهاب لمعلوماته الصحية مباشرة، نوجهه لشاشة التحقق من الإيميل!
+          await EmailService.sendPairingCode(
+            toEmail: newUserEntity.caregiverEmail!,
+            pairingCode: newUserEntity.pairingCode!,
+          );
+          
+          await EmailService.sendPatientVerificationCode(
+            toEmail: newUserEntity.email,
+            verificationCode: patientVerificationCode!, 
+          );
+        } catch (emailError) {
+          // 🛑 التراجع: حذف الحساب بالكامل إذا فشل الإرسال حتى لا يُعلق
+          await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+          await userCredential.user?.delete();
+          throw Exception('تعذر إرسال الإيميل. تأكد من صحة البريد أو إعدادات خدمة EmailService.');
+        }
+
+        // التوجيه إذا نجح كل شيء
         if (mounted) Navigator.pushReplacementNamed(context, '/patient_verification'); 
         
       } else if (userRole == 'caregiver') {
-        // المرافق ينتقل لصفحة إدخال الكود
         if (mounted) Navigator.pushReplacementNamed(context, '/pairing'); 
       }
 
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
         _showErrorSnackBar('هذا البريد مسجل مسبقاً في النظام! يرجى استخدام بريد آخر ⚠️');
-      } 
-      else if (e.code == 'weak-password') {
+      } else if (e.code == 'weak-password') {
         _showErrorSnackBar('كلمة المرور ضعيفة جداً يرجى اختيار كلمة أقوى ⚠️');
-      } 
-      else if (e.code == 'network-request-failed') {
+      } else if (e.code == 'network-request-failed') {
         _showErrorSnackBar('عذراً فشل الاتصال بالشبكة.. تحقق من الإنترنت 📡');
-      } 
-      else {
+      } else {
         _showErrorSnackBar('حدث خطأ أثناء التسجيل: ${e.message}');
       }
     } catch (e) {
-      _showErrorSnackBar('حدث خطأ غير متوقع، يرجى إعادة المحاولة ⚠️');
+      // ستظهر هنا الرسالة التي كتبناها عند فشل الإيميل
+      _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
       debugPrint("Error: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);

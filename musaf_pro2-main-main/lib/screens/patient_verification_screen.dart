@@ -1,4 +1,3 @@
-import 'dart:async'; // 🚀 استيراد مكتبة المؤقتات
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,91 +16,11 @@ class PatientVerificationScreen extends StatefulWidget {
 class _PatientVerificationScreenState extends State<PatientVerificationScreen> {
   final TextEditingController _codeController = TextEditingController();
   bool _isLoading = false;
-  bool _isResending = false; // حالة تحميل خاصة بإعادة الإرسال
-
-  // ⏱️ متغيرات المؤقت التنازلي
-  Timer? _timer;
-  int _startSeconds = 60;
-  bool _canResend = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _startCountdown(); // تشغيل المؤقت تلقائياً عند فتح الشاشة
-  }
 
   @override
   void dispose() {
     _codeController.dispose();
-    _timer?.cancel(); // إلغاء المؤقت عند الخروج لمنع تسريب الذاكرة
     super.dispose();
-  }
-
-  // ⏱️ دالة تشغيل العداد التنازلي
-  void _startCountdown() {
-    setState(() {
-      _startSeconds = 60;
-      _canResend = false;
-    });
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_startSeconds == 0) {
-        setState(() {
-          _timer?.cancel();
-          _canResend = true;
-        });
-      } else {
-        setState(() {
-          _startSeconds--;
-        });
-      }
-    });
-  }
-
-  // 🚀 دالة إعادة إرسال الكود
-  // 🚀 دالة إعادة إرسال الكود المحدثة
-  void _resendVerificationCode() async {
-    if (!_canResend) return;
-
-    setState(() => _isResending = true);
-
-    try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        // توليد كود جديد
-        String newCode = (100000 + (DateTime.now().microsecond % 900000)).toString();
-
-        // 1. تحديث الكود في Firestore
-        // ملاحظة: تأكد أن نظام الإرسال لديك يراقب تحديث هذا الحقل
-        await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).update({
-          'patientVerificationCode': newCode,
-          'resendAt': FieldValue.serverTimestamp(), // حقل إضافي لإجبار الـ Trigger على العمل
-        });
-
-        if (mounted) {
-          // ✅ تعديل لون الرسالة إلى الأخضر المريح أو الأزرق
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-              'تم إرسال كود جديد إلى بريدك بنجاح 📨', 
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)
-            ),
-            backgroundColor: Color(0xFF2E7D32), // لون أخضر غامق (Success) يتماشى مع التطبيقات الطبية
-            behavior: SnackBarBehavior.floating,
-          ));
-          
-          _startCountdown(); // إعادة تشغيل العداد
-        }
-      }
-    } catch (e) {
-      debugPrint("Resend Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('فشل إعادة الإرسال، حاول ثانية ⚠️', style: TextStyle(fontFamily: 'Cairo')),
-          backgroundColor: Colors.red,
-        ));
-      }
-    } finally {
-      if (mounted) setState(() => _isResending = false);
-    }
   }
 
   // 🚀 دالة التحقق من كود المريض
@@ -140,6 +59,7 @@ class _PatientVerificationScreenState extends State<PatientVerificationScreen> {
                 content: Text('تم التحقق من بريدك بنجاح! ✅', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                 backgroundColor: Colors.green,
               ));
+              // التوجيه إلى شاشة البيانات الصحية بعد التحقق
               Navigator.pushNamedAndRemoveUntil(context, '/health_data', (route) => false); 
             }
           } else {
@@ -217,7 +137,7 @@ class _PatientVerificationScreenState extends State<PatientVerificationScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  "أرسلنا كوداً مكوناً من 6 أرقام إلى بريدك الإلكتروني الشخصي. يرجى إدخاله للمتابعة.",
+                  "أرسلنا كوداً مكوناً من 6 أرقام إلى بريدك الإلكتروني الشخصي. يرجى إدخاله للمتابعة",
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5, fontFamily: 'Cairo'),
                 ),
@@ -251,48 +171,6 @@ class _PatientVerificationScreenState extends State<PatientVerificationScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 25),
-
-                // 🔄 💥 قسم إعادة إرسال الكود الذكي المضاف حديثاً 💥
-                _isResending
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: musafRed),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _canResend ? "لم يصلك الكود؟ " : "يمكنك إعادة الإرسال خلال ",
-                            style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 14),
-                          ),
-                          _canResend
-                              ? GestureDetector(
-                                  onTap: _resendVerificationCode,
-                                  child: const Text(
-                                    "إعادة إرسال كود جديد",
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      color: musafRed,
-                                      fontWeight: FontWeight.bold,
-                                      decoration: TextDecoration.underline,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                )
-                              : Text(
-                                  "$_startSeconds ثانية",
-                                  style: const TextStyle(
-                                    fontFamily: 'Cairo',
-                                    color: Colors.black87,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                        ],
-                      ),
-
                 const Spacer(),
 
                 _isLoading
@@ -304,11 +182,7 @@ class _PatientVerificationScreenState extends State<PatientVerificationScreen> {
                         onPressed: _verifyCode,
                       ),
 
-                const SizedBox(height: 15),
-                
-                
-
-                const SizedBox(height: 20),
+                const SizedBox(height: 35),
               ],
             ),
           ),
