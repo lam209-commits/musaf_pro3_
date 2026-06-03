@@ -53,10 +53,8 @@ class AuthService {
           role: role,
           email: email,
           pairingCode: role == 'patient' ? pCode : null, // الكود يُمنح للمريض فقط ليقترن به المرافق
-          isCaregiverVerified: false,
         );
 
-        // تخزين البيانات تحت الجدول الموحد 'users' بالهيكلية الصحيحة
         await _firestore
             .collection('users')
             .doc(user.uid)

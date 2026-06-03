@@ -8,37 +8,43 @@ class UserModel extends UserEntity {
     required super.phoneNumber,
     required super.role,
     required super.email,
-    super.patientVerificationCode, // 👈 تمت الإضافة هنا لكي لا يظهر لك خطأ
-    super.isEmailVerified,
-    super.caregiverEmail,
-    super.relation,
-    super.pairingCode,
-    super.isCaregiverVerified,
+    super.caregiverEmail, // 👈 جعلناها اختيارية (بدون required) لتناسب الجميع
+    super.relation,       // 👈 أضفناها هنا
     super.linkedPatientId,
     super.linkedPatientName,
+    super.caregiverId,
+    super.caregiverName,
+    super.pairingCode,
+
+    super.patientVerificationCode, // 🚀 👈 تمريره للـ super
+    super.isLinked = false, // قيمة افتراضية
+    super.isEmailVerified, 
   });
 
-  // تحويل البيانات القادمة من Firestore إلى موديل برمجى
+  // تحويل البيانات من Firestore إلى Model
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+
     return UserModel(
       uid: doc.id,
       displayName: data['displayName'] ?? '',
       phoneNumber: data['phoneNumber'] ?? '',
       role: data['role'] ?? 'patient',
       email: data['email'] ?? '',
-      patientVerificationCode: data['patientVerificationCode'],
-      isEmailVerified: data['isEmailVerified'],
-      caregiverEmail: data['caregiverEmail'],
-      relation: data['relation'],
-      pairingCode: data['pairingCode'],
-      isCaregiverVerified: data['isCaregiverVerified'],
+      caregiverEmail: data['caregiverEmail'], // قراءة الإيميل
+      relation: data['relation'],             // قراءة العلاقة
       linkedPatientId: data['linkedPatientId'],
       linkedPatientName: data['linkedPatientName'],
+      caregiverId: data['caregiverId'],
+      caregiverName: data['caregiverName'],
+      pairingCode: data['pairingCode'],
+      patientVerificationCode: data['patientVerificationCode'], // 🚀 👈 قراءة الكود من فايربيز
+      isLinked: data['isLinked'] ?? false,
+      isEmailVerified: data['isEmailVerified'], 
     );
   }
 
-  // تحويل الكائن إلى Map لرفعه وحفظه في Firestore
+  // تحويل البيانات من Model إلى Firestore
   Map<String, dynamic> toFirestore() {
     return {
       'uid': uid,
@@ -46,17 +52,19 @@ class UserModel extends UserEntity {
       'phoneNumber': phoneNumber,
       'role': role,
       'email': email,
-      'patientVerificationCode': patientVerificationCode,
-      'isEmailVerified': isEmailVerified,
-      if (patientVerificationCode != null) 'patientVerificationCode': patientVerificationCode,
-      if (isEmailVerified != null) 'isEmailVerified': isEmailVerified,
-      if (caregiverEmail != null) 'caregiverEmail': caregiverEmail,
-      if (relation != null) 'relation': relation,
-      if (pairingCode != null) 'pairingCode': pairingCode,
-      if (isCaregiverVerified != null) 'isCaregiverVerified': isCaregiverVerified,
+      'caregiverEmail': caregiverEmail,
+      'relation': relation,
+      'isLinked': isLinked,
+      'updatedAt': FieldValue.serverTimestamp(),
+      
+      // الحقول الاختيارية (باستخدام if)
       if (linkedPatientId != null) 'linkedPatientId': linkedPatientId,
       if (linkedPatientName != null) 'linkedPatientName': linkedPatientName,
-      'createdAt': FieldValue.serverTimestamp(),
+      if (caregiverId != null) 'caregiverId': caregiverId,
+      if (caregiverName != null) 'caregiverName': caregiverName,
+      if (pairingCode != null) 'pairingCode': pairingCode,
+      if (patientVerificationCode != null) 'patientVerificationCode': patientVerificationCode, // 🚀 👈 حفظ الكود في فايربيز
+      if (isEmailVerified != null) 'isEmailVerified': isEmailVerified,
     };
   }
 }

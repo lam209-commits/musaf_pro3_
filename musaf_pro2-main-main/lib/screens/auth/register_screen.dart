@@ -77,6 +77,7 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
   // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل
  // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل (نسخة آمنة ومحسنة)
  // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل (نسخة آمنة ومحسنة)
+ // 🚀 الدالة المدمجة والمنظمة بالكامل لمعالجة التسجيل (النسخة المعمارية النظيفة)
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -85,146 +86,102 @@ Color get buttonColor => isPatient ? primaryRed : AppColors.primary;
       return;
     }
 
-    String enteredEmail = _emailController.text.trim().toLowerCase();
-    String caregiverEmail = _caregiverEmailController.text.trim().toLowerCase();
-
-    if (userRole == 'patient' && enteredEmail == caregiverEmail) {
-      _showErrorSnackBar('لا يمكن استخدام نفس البريد للمريض والمرافق ⚠️');
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
-      String phoneRaw = _phoneController.text.trim();
-      String fullPhoneNumber = "+967 $phoneRaw"; 
-      String password = _passController.text.trim();
-      
-      String? linkedPatientId;
-      String? linkedPatientName; 
+      final email = _emailController.text.trim().toLowerCase();
+      final password = _passController.text.trim();
+      final caregiverEmail = _caregiverEmailController.text.trim().toLowerCase();
 
-      if (userRole == 'caregiver') {
-        final patientEntity = await _authRepository.findPatientByCaregiverEmail(enteredEmail);
-        if (patientEntity == null) {
-          _showErrorSnackBar('❌ هذا البريد غير مصرح له! يجب أن يضيفك المريض أولاً');
-          setState(() => _isLoading = false);
-          return;
-        } else {
-          linkedPatientId = patientEntity.uid;
-          linkedPatientName = patientEntity.displayName.isNotEmpty ? patientEntity.displayName : 'التابع';
-        }
+      // منع المستخدم من إدخال نفس البريد (نقطة ممتازة في تجربة المستخدم HCI)
+      if (userRole == 'patient' && email == caregiverEmail) {
+        _showErrorSnackBar('لا يمكن استخدام نفس البريد للمريض والمرافق ⚠️');
+        return;
       }
 
-      // 1. إنشاء الحساب المباشر في Firebase Auth
-      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: enteredEmail,
+      // =========================
+      // 1. إنشاء حساب Firebase Auth
+      // =========================
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email: email,
         password: password,
       );
 
-      String uid = userCredential.user!.uid;
+      final uid = userCredential.user!.uid;
 
-      String? generatedPairingCode = userRole == 'patient' 
-          ? (Random.secure().nextInt(900000) + 100000).toString() 
-          : null;
-          
-      String? patientVerificationCode = userRole == 'patient' 
-          ? (Random.secure().nextInt(900000) + 100000).toString() 
-          : null;
+      // =========================
+      // 2. توليد الأكواد (للمريض فقط)
+      // 2. توليد الأكواد
+      String? generatedPairingCode;
+      String? generatedVerificationCode;
 
-      // 2. تجهيز هيكل البيانات
-      UserEntity newUserEntity = UserEntity(
+      if (userRole == 'patient') {
+        generatedPairingCode = (Random.secure().nextInt(900000) + 100000).toString();
+        generatedVerificationCode = (Random.secure().nextInt(900000) + 100000).toString();
+      }
+
+      // =========================
+      // 3. بناء الكيان الأساسي (بدون أي ربط مبدئي)
+      // =========================
+      final newUser = UserEntity(
         uid: uid,
         displayName: _nameController.text.trim(),
-        phoneNumber: fullPhoneNumber,
+        phoneNumber: "+967 ${_phoneController.text.trim()}",
         role: userRole!,
-        email: enteredEmail,
+        email: email,
         caregiverEmail: userRole == 'patient' ? caregiverEmail : null,
         relation: userRole == 'patient' ? _selectedRelation : null,
-        pairingCode: generatedPairingCode,
-        patientVerificationCode: patientVerificationCode,
+        
+        pairingCode: generatedPairingCode, // يُحفظ داخل المريض فقط
+patientVerificationCode: generatedVerificationCode, // 🚀 👈 تمرير الكود لقاعدة البيانات 
+       isLinked: false, // لا يوجد ربط وقت التسجيل نهائياً
         isEmailVerified: userRole == 'patient' ? false : null,
-        isCaregiverVerified: userRole == 'patient' ? false : null,
-        linkedPatientId: userRole == 'caregiver' ? linkedPatientId : null,
-        linkedPatientName: userRole == 'caregiver' ? linkedPatientName : null,
       );
 
-      // 3. حفظ البيانات في Firestore
-      try {
-        await _authRepository.saveUserData(newUserEntity);
-      } catch (e) {
-        await userCredential.user?.delete(); // تراجع
-        throw Exception('فشل حفظ بيانات المستخدم في قاعدة البيانات، تم التراجع');
-      }
+      // =========================
+      // 4. حفظ المستخدم في Firestore
+      // =========================
+      await _authRepository.saveUserData(newUser);
 
-      // 4. إرسال الإيميلات (مع حماية التراجع إذا فشل الإرسال)
+      // =========================
+      // 5. التوجيه وإرسال الإيميلات
+      // =========================
       if (userRole == 'patient') {
-        try {
-          // 💡 [مساعدة للتطوير]: طباعة الأكواد في الـ Terminal لكي تنسخيها وتكملي الاختبار 
-          debugPrint("============== الأكواد السرية للتطوير ==============");
-          debugPrint("🔑 كود تحقق المريض: $patientVerificationCode");
-          debugPrint("🔑 كود ربط المرافق: $generatedPairingCode");
-          debugPrint("=================================================");
+        // المريض: نرسل كود الربط لبريد المرافق، وكود التحقق لبريد المريض نفسه
+        await EmailService.sendPairingCode(
+          toEmail: caregiverEmail,
+          pairingCode: generatedPairingCode!,
+        );
 
-          await EmailService.sendPairingCode(
-            toEmail: newUserEntity.caregiverEmail!,
-            pairingCode: newUserEntity.pairingCode!,
-          );
-          
-          await EmailService.sendPatientVerificationCode(
-            toEmail: newUserEntity.email,
-            verificationCode: patientVerificationCode!, 
-          );
-        } catch (emailError) {
-          // 🛑 التراجع: حذف الحساب بالكامل إذا فشل الإرسال حتى لا يُعلق
-          await FirebaseFirestore.instance.collection('users').doc(uid).delete();
-          await userCredential.user?.delete();
-          throw Exception('تعذر إرسال الإيميل. تأكد من صحة البريد أو إعدادات خدمة EmailService.');
+        await EmailService.sendPatientVerificationCode(
+          toEmail: email,
+          verificationCode: generatedVerificationCode!,
+        );
+
+        if (mounted) {
+          // توجيه المريض لصفحة التحقق من بريده
+          Navigator.pushReplacementNamed(context, '/patient_verification');
         }
-
-        // التوجيه إذا نجح كل شيء
-        if (mounted) Navigator.pushReplacementNamed(context, '/patient_verification'); 
-        
-      } else if (userRole == 'caregiver') {
-        if (mounted) Navigator.pushReplacementNamed(context, '/pairing'); 
+      } else {
+        // المرافق: تم إنشاء حسابه بنجاح، يتوجه فوراً لصفحة الربط لإدخال الكود
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/pairing');
+        }
       }
-
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
-        _showErrorSnackBar('هذا البريد مسجل مسبقاً في النظام! يرجى استخدام بريد آخر ⚠️');
-      } else if (e.code == 'weak-password') {
-        _showErrorSnackBar('كلمة المرور ضعيفة جداً يرجى اختيار كلمة أقوى ⚠️');
-      } else if (e.code == 'network-request-failed') {
-        _showErrorSnackBar('عذراً فشل الاتصال بالشبكة.. تحقق من الإنترنت 📡');
+        _showErrorSnackBar('البريد الإلكتروني مستخدم مسبقاً ⚠️');
       } else {
-        _showErrorSnackBar('حدث خطأ أثناء التسجيل: ${e.message}');
+        _showErrorSnackBar('حدث خطأ في المصادقة: ${e.message}');
       }
     } catch (e) {
-      // ستظهر هنا الرسالة التي كتبناها عند فشل الإيميل
-      _showErrorSnackBar(e.toString().replaceAll('Exception: ', ''));
-      debugPrint("Error: $e");
+      debugPrint("Firebase Error: $e");
+      _showErrorSnackBar('حدث خطأ أثناء الحفظ في قاعدة البيانات ⚠️'); // 👈 هذا سيكشف لنا إذا كانت قاعدة البيانات ترفض الحفظ
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-  // دالة عرض رسائل الخطأ بتصميم موحد
-  // دالة عرض رسائل الخطأ بتصميم ولون موحد مع التطبيق
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message, 
-          textAlign: TextAlign.right,
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)
-        ),
-        backgroundColor: primaryRed, 
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(15),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -380,6 +337,7 @@ const SizedBox(height: 30),
 
   // 🌟 دالة بناء الحقل المستقرة والمحسنة هندسياً لتحافظ على نفس حجم وخلفية الكود القديم تماماً
  // 🌟 دالة بناء الحقل المستقرة والمحسنة لمنع الرموز والحروف في حقل الهاتف
+ // 🌟 دالة بناء الحقل (النسخة الاحترافية المتوافقة مع شاشة الدخول)
   Widget _buildCustomTextField({
     required TextEditingController controller, 
     required String hint, 
@@ -387,54 +345,83 @@ const SizedBox(height: 30),
     bool isNumber = false, 
     String? prefixText,
     Widget? suffixIcon,
-    TextInputType? keyboardType, // 👈 1. أضفنا هذا السطر
+    TextInputType? keyboardType,
     required String? Function(String?) validator,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5), 
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextFormField(
-        controller: controller,
-        obscureText: isPass,
-        textAlign: TextAlign.right,
-        textDirection: TextDirection.ltr, 
-        maxLength: isNumber ? 9 : null,
-        validator: validator,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
+    // 🎨 تحديد لون التحديد حسب نوع المستخدم (أحمر للمريض، بنفسجي للمرافق)
+    final Color activeColor = userRole == 'patient' ? primaryRed : AppColors.primary;
+
+    return TextFormField( // تم إزالة الـ Container الخارجي والاعتماد على خصائص الحقل مباشرة
+      controller: controller,
+      obscureText: isPass,
+      textAlign: TextAlign.right,
+      textDirection: TextDirection.ltr, 
+      maxLength: isNumber ? 9 : null,
+      validator: validator,
+      // ⏳ التحقق يحدث بعد تفاعل المستخدم، وتظهر الرسالة بهدوء بالأسفل
+      autovalidateMode: AutovalidateMode.onUserInteraction, 
+      
+      inputFormatters: isNumber 
+          ? [FilteringTextInputFormatter.digitsOnly] 
+          : null,
+          
+      style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, letterSpacing: 1.0, fontWeight: FontWeight.w600),
+      keyboardType: keyboardType ?? (isNumber ? TextInputType.number : TextInputType.text),
+      
+      decoration: InputDecoration(
+        counterText: "", 
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.grey, fontSize: 13, fontFamily: 'Cairo', fontWeight: FontWeight.normal),
         
-        // 🚀 التعديل هنا: منع المستخدم من إدخال أي شيء عدا الأرقام إذا كان الحقل رقماً
-        inputFormatters: isNumber 
-            ? [FilteringTextInputFormatter.digitsOnly] 
+        // 🎨 لون خلفية الحقل
+        fillColor: const Color(0xFFF5F5F5),
+        filled: true,
+        
+        prefixIcon: prefixText != null 
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                child: Text(prefixText, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 14, fontFamily: 'Cairo')),
+              )
             : null,
-            
-        style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, letterSpacing: 1.0, fontWeight: FontWeight.w500),
-        keyboardType: keyboardType ?? (isNumber ? TextInputType.number : TextInputType.text), // 👈 2. التعديل هنا
-        decoration: InputDecoration(
-          counterText: "", 
-          hintText: hint,
-          hintStyle: const TextStyle(color: Colors.grey, fontSize: 13, fontFamily: 'Cairo', fontWeight: FontWeight.normal),
-          prefixIcon: prefixText != null 
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-                  child: Text(prefixText, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 14, fontFamily: 'Cairo')),
-                )
-              : null,
-          suffixIcon: suffixIcon,
-          isDense: true,
-          contentPadding: const EdgeInsets.all(15),
-          border: const OutlineInputBorder(borderSide: BorderSide.none),
-          enabledBorder: const OutlineInputBorder(borderSide: BorderSide.none),
-          focusedBorder: const OutlineInputBorder(borderSide: BorderSide.none),
-          errorBorder: const OutlineInputBorder(borderSide: BorderSide.none),
-          focusedErrorBorder: const OutlineInputBorder(borderSide: BorderSide.none),
-          errorStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.redAccent, height: 1.0, fontWeight: FontWeight.bold),
+        suffixIcon: suffixIcon,
+        isDense: true,
+        contentPadding: const EdgeInsets.all(16), // مساحة داخلية مريحة للعين
+        
+        // 🚀 1. الحدود في الحالة العادية (بدون أخطاء أو تركيز)
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.transparent),
+        ),
+        
+        // 🚀 2. الحدود عند الضغط على الحقل (يتلون بلون المستخدم)
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: activeColor, width: 1.5),
+        ),
+        
+        // 🚀 3. الحدود عند وجود خطأ (أحمر)
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.0),
+        ),
+        
+        // 🚀 4. الحدود عند وجود خطأ والمستخدم يحاول التعديل
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 2.0),
+        ),
+        
+        // 📝 تنسيق رسالة الخطأ لتظهر بشكل أنيق أسفل الحقل مباشرة
+        errorStyle: const TextStyle(
+          fontFamily: 'Cairo', 
+          fontSize: 12, 
+          color: Colors.redAccent, 
+          height: 1.2, 
+          fontWeight: FontWeight.bold
         ),
       ),
     );
   }
-
   Widget _buildDropdownField() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -456,6 +443,25 @@ const SizedBox(height: 30),
           )).toList(),
           onChanged: (val) => setState(() => _selectedRelation = val),
         ),
+      ),
+    );
+  }
+  void _showErrorSnackBar(String message) {
+    // التأكد من أن الكلاس لا يزال موجوداً في الذاكرة
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message, 
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)
+        ),
+        backgroundColor: primaryRed, // اللون الأحمر الخاص بكِ
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(15),
+        duration: const Duration(seconds: 4),
       ),
     );
   }

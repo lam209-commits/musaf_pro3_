@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -128,9 +129,10 @@ class FamilyAlertsScreen extends StatelessWidget {
           children: [
             const SizedBox(height: 4),
             Text(
-              // تم التغيير إلى time_string بناءً على الكود في ZoneRepository الذي أرسلته سابقاً
-              // إذا كنت تستخدم date_time_string في قاعدة البيانات، استبدلها هنا
-              alert['time_string'] ?? '', 
+              // تحويل التايم ستامب إلى نص مقروء
+              alert['timestamp'] != null 
+                  ? (alert['timestamp'] as Timestamp).toDate().toString().substring(0, 16) 
+                  : '',
               style: const TextStyle(
                 fontSize: 12,
                 color: Colors.grey,

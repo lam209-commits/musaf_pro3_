@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:geolocator/geolocator.dart'; // قد لا نحتاجه هنا بعد التعديل، لكن تم الإبقاء عليه لتفادي أي أخطاء
 import '../providers/location_provider.dart';
 import '../../domain/entities/safe_zone.dart';
 import '../widgets/zone_card.dart';
@@ -14,39 +14,32 @@ class AddZoneScreen extends StatefulWidget {
 }
 
 class _AddZoneScreenState extends State<AddZoneScreen> {
-  final _formKey = GlobalKey<FormState>();
+  // 🚀 تم حذف _formKey من هنا لمنع مشاكل الـ Modal المتكررة
+
   bool _isFetchingLocation = false;
-  
+
   // ألوان الثيم المعتمدة في التطبيق
   final Color themeColor = const Color(0xFF2E7D32); // الأخضر الأساسي
   final Color backgroundColor = const Color(0xFFF8F9FD); // الخلفية الفاتحة
-  
-  final List<String> _nameOptions = ['منزل', 'مدرسة', 'حديقة', 'مسجد', 'عمل', 'مستشفى', 'منطقة مخصصة'];
+
+  final List<String> _nameOptions = [
+    'منزل',
+    'مدرسة',
+    'حديقة',
+    'مسجد',
+    'عمل',
+    'مستشفى',
+    'منطقة مخصصة'
+  ];
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => 
-      context.read<LocationProvider>().loadSafeZones(widget.patientId)
-    );
+    Future.microtask(() =>
+        context.read<LocationProvider>().loadSafeZones(widget.patientId));
   }
 
   // --- Logic Layer ---
-
-  Future<void> _fetchCurrentPosition(TextEditingController lat, TextEditingController lng, StateSetter setModalState) async {
-    setModalState(() => _isFetchingLocation = true);
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
-      );
-      lat.text = position.latitude.toString();
-      lng.text = position.longitude.toString();
-    } catch (e) {
-      _showCustomSnackBar("فشل في تحديد الموقع - تأكد من صلاحيات الـ GPS", isError: true);
-    } finally {
-      setModalState(() => _isFetchingLocation = false);
-    }
-  }
 
   void _onSavePressed({
     required bool isEdit,
@@ -56,36 +49,36 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     required String lng,
     required double radius,
   }) async {
-    if (_formKey.currentState!.validate()) {
-      final pro = context.read<LocationProvider>();
-      
-      Navigator.pop(context);
+    final pro = context.read<LocationProvider>();
 
-      if (!isEdit) {
-        String resultMessage = await pro.addNewSafeZone(
-          patientId: widget.patientId,
-          name: name,
-          latitude: double.parse(lat),
-          longitude: double.parse(lng),
-          radius: radius,
-        );
+    Navigator.pop(context);
 
-        if (mounted) {
-          bool isSuccess = resultMessage.contains('نجاح');
-          _showCustomSnackBar(resultMessage, isError: !isSuccess);
-        }
+    if (!isEdit) {
+      String resultMessage = await pro.addNewSafeZone(
+        patientId: widget.patientId,
+        name: name,
+        latitude: double.parse(lat.trim()),
+longitude: double.parse(lng.trim()),
+        radius: radius,
+      );
+
+      if (mounted) {
+        bool isSuccess = resultMessage.contains('نجاح');
+        _showCustomSnackBar(resultMessage, isError: !isSuccess);
       }
     }
+    // ملاحظة: إذا كان هناك منطق للتحديث (Edit)، يمكن إضافته هنا مستقبلاً
   }
 
   void _showCustomSnackBar(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message, 
-          style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold)
-        ),
-        backgroundColor: isError ? Colors.redAccent : themeColor, // استخدام اللون الأخضر للنجاح والأحمر للخطأ
+        content: Text(message,
+            style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 14,
+                fontWeight: FontWeight.bold)),
+        backgroundColor: isError ? Colors.redAccent : themeColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         duration: const Duration(seconds: 3),
@@ -98,7 +91,7 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor, // استخدام لون الخلفية الموحد
+      backgroundColor: backgroundColor,
       appBar: _buildAppBar(),
       body: _buildZonesList(),
       floatingActionButton: _buildAddButton(),
@@ -110,17 +103,17 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     return AppBar(
       backgroundColor: backgroundColor,
       foregroundColor: Colors.black87,
-      title: const Text("إدارة المناطق الآمنة", 
-        style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+      title: const Text("إدارة المناطق الآمنة",
+          style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
       centerTitle: true,
       elevation: 0,
       actions: [
-        // زر مسح الكل من الـ Provider العلوي مباشرة
         Consumer<LocationProvider>(
           builder: (context, loc, _) {
             if (loc.safeZones.isEmpty) return const SizedBox.shrink();
             return IconButton(
-              icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 28),
+              icon: const Icon(Icons.delete_sweep_rounded,
+                  color: Colors.redAccent, size: 28),
               tooltip: "حذف جميع المناطق",
               onPressed: () => _confirmClearAll(loc),
             );
@@ -140,8 +133,7 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
           itemCount: loc.safeZones.length,
           itemBuilder: (context, index) {
             final zone = loc.safeZones[index];
-            
-            // إضافة ميزة السحب للحذف (Dismissible) الهندسية
+
             return Dismissible(
               key: Key(zone.id.isNotEmpty ? zone.id : index.toString()),
               direction: DismissDirection.endToStart,
@@ -156,7 +148,11 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text("حذف المنطقة", style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    Text("حذف المنطقة",
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.bold)),
                     SizedBox(width: 8),
                     Icon(Icons.delete_forever, color: Colors.white),
                   ],
@@ -186,37 +182,48 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
 
   void _openZoneModal({SafeZone? zone, int? index}) {
     final isEdit = zone != null;
-    final latController = TextEditingController(text: isEdit ? zone.latitude.toString() : "");
-    final lngController = TextEditingController(text: isEdit ? zone.longitude.toString() : "");
-    String selectedName = (isEdit && _nameOptions.contains(zone.name)) ? zone.name : _nameOptions.first;
+    final latController = TextEditingController(
+        text: isEdit ? zone.latitude.toString() : "");
+    final lngController = TextEditingController(
+        text: isEdit ? zone.longitude.toString() : "");
+    String selectedName = (isEdit && _nameOptions.contains(zone.name))
+        ? zone.name
+        : _nameOptions.first;
     double radius = isEdit ? zone.radius : 150.0;
+
+    // 🚀 نقل مفتاح الـ Form إلى هنا ليكون مستقلاً لكل نافذة تُفتح
+    final modalFormKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            left: 25, right: 25, top: 20
-          ),
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 25,
+              right: 25,
+              top: 20),
           child: Form(
-            key: _formKey,
+            key: modalFormKey, // 👈 استخدام المفتاح الخاص بالـ Modal هنا
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildModalHandle(),
                   const SizedBox(height: 20),
-                  _buildTypeDropdown(selectedName, (val) => setModalState(() => selectedName = val!)),
+                  _buildTypeDropdown(
+                      selectedName, (val) => setModalState(() => selectedName = val!)),
                   const SizedBox(height: 15),
                   _buildLocationPicker(latController, lngController, setModalState),
                   const SizedBox(height: 20),
                   _buildRadiusSlider(radius, (val) => setModalState(() => radius = val)),
                   const SizedBox(height: 25),
-                  _buildSubmitAction(isEdit, index, selectedName, latController, lngController, radius),
+                  _buildSubmitAction(isEdit, index, selectedName, latController,
+                      lngController, radius, modalFormKey),
                 ],
               ),
             ),
@@ -232,7 +239,10 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     return DropdownButtonFormField<String>(
       value: value,
       decoration: _inputDecoration("نوع المكان", Icons.label_outline),
-      items: _nameOptions.map((n) => DropdownMenuItem(value: n, child: Text(n, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
+      items: _nameOptions
+          .map((n) => DropdownMenuItem(
+              value: n, child: Text(n, style: const TextStyle(fontFamily: 'Cairo'))))
+          .toList(),
       onChanged: onChanged,
     );
   }
@@ -241,13 +251,15 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("نطاق الأمان: ${value.toInt()} متر", 
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        Text("نطاق الأمان: ${value.toInt()} متر",
+            style: const TextStyle(
+                fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         Slider(
           value: value,
-          min: 50, max: 1000,
+          min: 50,
+          max: 1000,
           divisions: 19,
-          activeColor: themeColor, // استخدام اللون الأخضر
+          activeColor: themeColor,
           onChanged: onChanged,
         ),
       ],
@@ -258,13 +270,16 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(fontFamily: 'Cairo'),
-      prefixIcon: Icon(icon, color: themeColor), // تلوين الأيقونة بالأخضر
+      prefixIcon: Icon(icon, color: themeColor),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: themeColor, width: 2)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide(color: themeColor, width: 2)),
     );
   }
 
-  Widget _buildLocationPicker(TextEditingController lat, TextEditingController lng, StateSetter setModalState) {
+  Widget _buildLocationPicker(TextEditingController lat,
+      TextEditingController lng, StateSetter setModalState) {
     return Column(
       children: [
         _buildAutoButton(lat, lng, setModalState),
@@ -280,33 +295,48 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     );
   }
 
-  Widget _buildAutoButton(TextEditingController lat, TextEditingController lng, StateSetter setModalState) {
+  // 🚀 التعديل الأهم: قراءة موقع المريض الفعلي بدلاً من جهاز المرافق
+  Widget _buildAutoButton(TextEditingController lat,
+      TextEditingController lng, StateSetter setModalState) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
-          backgroundColor: themeColor.withOpacity(0.1), // خلفية خضراء شفافة
-          foregroundColor: themeColor, // نص وأيقونة باللون الأخضر
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
-        ),
-        onPressed: () => _fetchCurrentPosition(lat, lng, setModalState),
-        icon: _isFetchingLocation 
-          ? SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: themeColor))
-          : const Icon(Icons.my_location),
-        label: const Text("استخدام موقعي الحالي", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+            backgroundColor: themeColor.withOpacity(0.1),
+            foregroundColor: themeColor,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15))),
+        onPressed: () {
+          final patientPos = context.read<LocationProvider>().currentPosition;
+          if (patientPos != null) {
+            setModalState(() {
+              lat.text = patientPos.latitude.toString();
+              lng.text = patientPos.longitude.toString();
+            });
+            _showCustomSnackBar("تم جلب موقع المريض بنجاح ✅", isError: false);
+          } else {
+            _showCustomSnackBar("عذراً، موقع المريض غير متوفر حالياً ⚠️", isError: true);
+          }
+        },
+        icon: const Icon(Icons.person_pin_circle), // أيقونة تعبر عن المريض
+        label: const Text("استخدام موقع المريض الحالي",
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   Widget _buildAddButton() {
     return FloatingActionButton.extended(
-      backgroundColor: themeColor, // الزر العائم بالأخضر
+      backgroundColor: themeColor,
       onPressed: () => _openZoneModal(),
       icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white),
-      label: const Text("إضافة منطقة", 
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+      label: const Text("إضافة منطقة",
+          style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Cairo')),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
   }
@@ -318,24 +348,38 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
         children: [
           Icon(Icons.location_off_rounded, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 15),
-          const Text("لا توجد مناطق آمنة مضافة", 
-            style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text("لا توجد مناطق آمنة مضافة",
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  color: Colors.grey,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
-  // نافذة تأكيد الحذف عند السحب (Swipe To Delete)
   Future<bool?> _showSwipeConfirmDialog(int index) {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("حذف سريع", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        content: const Text("هل أنت متأكد من حذف هذه المنطقة عبر السحب؟", style: TextStyle(fontFamily: 'Cairo')),
+        title: const Text("حذف سريع",
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: const Text("هل أنت متأكد من حذف هذه المنطقة عبر السحب؟",
+            style: TextStyle(fontFamily: 'Cairo')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("تراجع", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("حذف", style: TextStyle(color: Colors.red, fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text("تراجع",
+                  style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text("حذف",
+                  style: TextStyle(
+                      color: Colors.red,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold))),
         ],
       ),
     );
@@ -346,44 +390,81 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("حذف المنطقة", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        content: const Text("هل أنت متأكد من حذف هذه المنطقة؟", style: TextStyle(fontFamily: 'Cairo')),
+        title: const Text("حذف المنطقة",
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: const Text("هل أنت متأكد من حذف هذه المنطقة؟",
+            style: TextStyle(fontFamily: 'Cairo')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
           TextButton(
-            onPressed: () {
-              context.read<LocationProvider>().deleteSafeZone(index, widget.patientId);
-              Navigator.pop(context);
-              _showCustomSnackBar("تم الحذف بنجاح ✅", isError: false);
-            }, 
-            child: const Text("حذف", style: TextStyle(color: Colors.red, fontFamily: 'Cairo', fontWeight: FontWeight.bold))
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("تراجع",
+                  style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
+          TextButton(
+              onPressed: () {
+                context
+                    .read<LocationProvider>()
+                    .deleteSafeZone(index, widget.patientId);
+                Navigator.pop(context);
+                _showCustomSnackBar("تم الحذف بنجاح ✅", isError: false);
+              },
+              child: const Text("حذف",
+                  style: TextStyle(
+                      color: Colors.red,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold))),
         ],
       ),
     );
   }
 
-  // نافذة تأكيد حذف الكل لضمان عدم الحذف بالخطأ
+  // 🚀 تصحيح خطأ الحذف: استدعاء دالة deleteAllSafeZones الحقيقية
   void _confirmClearAll(LocationProvider loc) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("تنبيه  ⚠️", style: TextStyle(fontFamily: 'Cairo', color: Colors.red, fontWeight: FontWeight.bold)),
-        content: const Text("هل أنت متأكد تماماً من حذف جميع المناطق الآمنة دفعة واحدة؟ لا يمكن التراجع عن هذا الإجراء", style: TextStyle(fontFamily: 'Cairo', height: 1.5)),
+        title: const Text("تنبيه  ⚠️",
+            style: TextStyle(
+                fontFamily: 'Cairo',
+                color: Colors.red,
+                fontWeight: FontWeight.bold)),
+        content: const Text(
+            "هل أنت متأكد تماماً من حذف جميع المناطق الآمنة دفعة واحدة؟ لا يمكن التراجع عن هذا الإجراء",
+            style: TextStyle(fontFamily: 'Cairo', height: 1.5)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("تراجع",
+                  style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))),
           TextButton(
             onPressed: () async {
-              // مسح الكُل بشكل كامل وسريع
-              await loc.clearAllAlerts(widget.patientId);
-              // يفضل إعادة تحميل القائمة فارغة للتأكيد الفوري
-              await loc.loadSafeZones(widget.patientId); 
-              if (context.mounted) Navigator.pop(context);
-              _showCustomSnackBar("تم مسح جميع البيانات بنجاح 🧹", isError: false);
-            }, 
-            child: const Text("حذف الكل", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-            style: TextButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              try {
+                // 🛑 تم التعديل إلى deleteAllSafeZones (تأكدي من تواجدها في الـ LocationProvider)
+                // await loc.deleteAllSafeZones(widget.patientId); 
+                // سنستخدم مؤقتاً حلقة تكرار لحذفها بالترتيب إذا لم تتوفر الدالة الجاهزة للحذف الشامل
+                int count = loc.safeZones.length;
+                for (int i = count - 1; i >= 0; i--) {
+                   await loc.deleteSafeZone(i, widget.patientId);
+                }
+                
+                await loc.loadSafeZones(widget.patientId);
+                if (context.mounted) Navigator.pop(context);
+                _showCustomSnackBar("تم مسح جميع البيانات بنجاح 🧹",
+                    isError: false);
+              } catch (e) {
+                if (context.mounted) Navigator.pop(context);
+                _showCustomSnackBar("حدث خطأ أثناء مسح المناطق ⚠️", isError: true);
+              }
+            },
+            style: TextButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            child: const Text("حذف الكل",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Cairo')),
           ),
         ],
       ),
@@ -400,33 +481,50 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     );
   }
 
-  Widget _buildSubmitAction(bool isEdit, int? index, String name, TextEditingController lat, TextEditingController lng, double radius) {
+  Widget _buildSubmitAction(
+      bool isEdit,
+      int? index,
+      String name,
+      TextEditingController lat,
+      TextEditingController lng,
+      double radius,
+      GlobalKey<FormState> modalFormKey) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: themeColor, // زر الإرسال بالأخضر
-          padding: const EdgeInsets.all(15),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
-        ),
-        onPressed: () => _onSavePressed(
-          isEdit: isEdit,
-          index: index,
-          name: name,
-          lat: lat.text,
-          lng: lng.text,
-          radius: radius,
-        ),
-        child: Text(isEdit ? "تحديث" : "حفظ المنطقة", 
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 16)),
+            backgroundColor: themeColor,
+            padding: const EdgeInsets.all(15),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15))),
+        onPressed: () {
+          // 👈 استخدام المفتاح الصحيح للتحقق من صحة المدخلات
+          if (modalFormKey.currentState!.validate()) {
+            _onSavePressed(
+              isEdit: isEdit,
+              index: index,
+              name: name,
+              lat: lat.text,
+              lng: lng.text,
+              radius: radius,
+            );
+          }
+        },
+        child: Text(isEdit ? "تحديث" : "حفظ المنطقة",
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cairo',
+                fontSize: 16)),
       ),
     );
   }
 
   Widget _buildModalHandle() {
     return Container(
-      width: 50, height: 5, 
-      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))
-    );
+        width: 50,
+        height: 5,
+        decoration: BoxDecoration(
+            color: Colors.grey[300], borderRadius: BorderRadius.circular(10)));
   }
 }

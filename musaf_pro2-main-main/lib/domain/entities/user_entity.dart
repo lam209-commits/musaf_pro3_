@@ -2,18 +2,26 @@ class UserEntity {
   final String uid;
   final String displayName;
   final String phoneNumber;
-  final String role;
+  final String role; // patient | caregiver
   final String email;
-  final String? caregiverEmail;
   final String? relation;
-  final String? pairingCode;
-  final bool? isCaregiverVerified;
+  final String? caregiverEmail; // 👈 أضيفي هذا السطر هنا
+
+  // ====== ربط المرافق بالمريض ======
   final String? linkedPatientId;
   final String? linkedPatientName;
-  final String? patientVerificationCode; // 👈 أضيفي هذا
-  final bool? isEmailVerified;         // 👈 وأضيفي هذا
 
-  // وتأكدي من إضافتهما داخل الـ Constructor الخاص بـ UserEntity
+  // ====== ربط المريض بالمرافق (مهم جداً) ======
+  final String? caregiverId;
+  final String? caregiverName;
+
+  // ====== نظام التحقق ======
+  final String? pairingCode;
+  final String? patientVerificationCode; // 🚀 👈 الحقل الذي كان مفقوداً ويسبب المشكلة
+  final bool isLinked;
+
+  // ====== إضافات تحقق ======
+  final bool? isEmailVerified;
 
   const UserEntity({
     required this.uid,
@@ -21,13 +29,18 @@ class UserEntity {
     required this.phoneNumber,
     required this.role,
     required this.email,
-    this.caregiverEmail,
-    this.relation,
-    this.pairingCode,
-    this.isCaregiverVerified,
-    this.linkedPatientId,
-    this.linkedPatientName, this.patientVerificationCode, this.isEmailVerified,
 
-  // وتأكدي من إضافتهما داخل الـ Constructor الخاص بـ UserEntity
+    this.linkedPatientId,
+    this.linkedPatientName,
+
+    this.caregiverId,
+    this.caregiverName,
+
+    this.pairingCode,
+    this.isLinked = false,
+
+    this.isEmailVerified, this.relation, this.caregiverEmail, this.patientVerificationCode,
   });
+
+  bool get isCaregiverVerified => isLinked;
 }

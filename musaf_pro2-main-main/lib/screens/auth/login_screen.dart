@@ -4,11 +4,9 @@ import 'package:musaf_pro/core/theme/app_colors.dart';
 import 'package:musaf_pro/screens/auth/PermissionHandle.dart';
 import '../../services/auth_service.dart';
 
-// استدعاء طبقات المعمارية النظيفة والزر الموحد
+// استدعاء طبقات المعمارية النظيفة
 import '../../domain/repositories/auth_repository.dart';
 import '../../data/repositories/firebase_auth_repository_impl.dart';
-import 'package:musaf_pro/widgets/custom_button.dart';
-// 🚀 استدعاء شاشة فحص الصلاحيات
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,17 +16,14 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // ==========================================
-  // 🛑 المنطق البرمجي (Logic) - لم يتم حذف أو تغيير أي شيء
-  // ==========================================
   final AuthService _auth = AuthService();
   final AuthRepository _authRepository = FirebaseAuthRepositoryImpl();
 
   final _emailController = TextEditingController();
   final _passController = TextEditingController();
-  
+
   final _formKey = GlobalKey<FormState>();
-  
+
   bool _isLoading = false;
   bool _isObscurePass = true;
   final Color musafRed = const Color(0xFFB7131A);
@@ -37,15 +32,15 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
+    
     setState(() => _isLoading = true);
-
+    
     try {
       var user = await _auth.signIn(
-        _emailController.text.trim(),
+        _emailController.text.trim().toLowerCase(), // توحيد حالة الأحرف لتفادي مشاكل المقارنة
         _passController.text.trim(),
       );
-
+      
       if (user != null) {
         debugPrint("🔵 تسجيل دخول ناجح، جاري جلب بيانات الدور والربط...");
         
@@ -59,23 +54,39 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
 
-          if (userEntity.role == 'caregiver' && (userEntity.linkedPatientId == null || userEntity.linkedPatientId!.isEmpty)) {
-            Navigator.pushNamedAndRemoveUntil(context, '/pairing', (route) => false);
-          } else {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PermissionHandlerWrapper(userType: userEntity.role ?? 'patient'),
-              ),
-              (route) => false,
+          // 🔒 1. فحص تأكيد البريد للمريض (إغلاق ثغرة الدخول بدون تحقق)
+          if (userEntity.role == 'patient' && userEntity.isEmailVerified != true) {
+            Navigator.pushNamedAndRemoveUntil(
+              context, 
+              '/patient_verification', 
+              (route) => false
             );
+            return;
           }
+
+          // 🔒 2. منع المرافق من تجاوز شاشة الربط إذا لم يكتمل الربط
+          if (userEntity.role == 'caregiver' && (userEntity.linkedPatientId == null || userEntity.linkedPatientId!.isEmpty)) {
+            Navigator.pushNamedAndRemoveUntil(
+              context, 
+              '/pairing', 
+              (route) => false
+            );
+            return;
+          } 
+          
+          // 🚀 3. التوجيه الصحيح بناءً على الدور (تم إزالة ?? patient لأن الدور إلزامي)
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PermissionHandlerWrapper(userType: userEntity.role),
+            ),
+            (route) => false,
+          );
         }
-      } 
-      
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) setState(() => _isLoading = false);
-
+      
       if (e.code == 'user-not-found') {
         _showSnackBar('البريد الإلكتروني غير مسجل لدينا ⚠️');
       } else if (e.code == 'wrong-password') {
@@ -85,10 +96,9 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         _showSnackBar('حدث خطأ: ${e.message}');
       }
-      
     } catch (e) {
       debugPrint("🔴 خطأ غير متوقع: $e");
-      if (mounted) setState(() => _isLoading = false); 
+      if (mounted) setState(() => _isLoading = false);
       _showSnackBar('تأكد من اتصالك بالإنترنت 🌐');
     }
   }
@@ -96,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showForgotPasswordDialog() {
     final resetEmailController = TextEditingController(text: _emailController.text);
     bool isResetting = false;
-
+    
     showDialog(
       context: context,
       builder: (context) {
@@ -105,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text(
-                'استعادة كلمة المرور', 
+                'استعادة كلمة المرور',
                 style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
                 textAlign: TextAlign.right,
               ),
@@ -113,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لتعيين كلمة مرور جديدة.',
+                    'أدخل بريدك الإلكتروني لتعيين كلمة مرور جديدة',
                     style: TextStyle(fontFamily: 'Cairo', fontSize: 13, height: 1.5),
                   ),
                   const SizedBox(height: 15),
@@ -121,14 +131,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: resetEmailController,
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.right, // توجيه النص لليمين
+                    textAlign: TextAlign.right,
                     decoration: InputDecoration(
                       hintText: 'example@mail.com',
                       filled: true,
                       fillColor: Colors.grey[200],
                       prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), 
+                        borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(vertical: 15),
@@ -152,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       _showSnackBar('يرجى إدخال بريد إلكتروني صحيح ⚠️');
                       return;
                     }
-
+                    
                     setStateDialog(() => isResetting = true);
-
+                    
                     try {
                       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
                       if (context.mounted) {
@@ -177,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: isResetting
                       ? const SizedBox(
-                          height: 20, width: 20, 
+                          height: 20, width: 20,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                         )
                       : const Text('إرسال الرابط', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
@@ -192,20 +202,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showSnackBar(String message) {
     if (!mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          message, 
-          textAlign: TextAlign.right, 
+          message,
+          textAlign: TextAlign.right,
           style: const TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: AppColors.error, // 👈 اللون الأحمر الخاص بتطبيقك
-        behavior: SnackBarBehavior.floating, // 👈 يجعل الرسالة تطفو بشكل أنيق
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10), // 👈 حواف دائرية تتناسب مع تصميمك
+          borderRadius: BorderRadius.circular(10),
         ),
-        margin: const EdgeInsets.all(15), // 👈 إبعادها عن الحواف قليلاً
-        duration: const Duration(seconds: 3), // مدة ظهور الرسالة
+        margin: const EdgeInsets.all(15),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -218,15 +229,15 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ==========================================
-  // 🎨 واجهة المستخدم (UI) 
+  // 🎨 واجهة المستخدم (UI)
   // ==========================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // خلفية بيضاء نقية
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Directionality(
-          textDirection: TextDirection.rtl, // إجبار الواجهة على الاتجاه العربي
+          textDirection: TextDirection.rtl,
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 25.0),
@@ -234,13 +245,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 key: _formKey,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start, // محاذاة العناصر لليمين
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 20),
                     
-                    // 🚀 إضافة الشعار هنا في أعلى الشاشة
+                    // الشعار
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center, // لجعل الشعار في المنتصف
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.add_box_rounded, color: musafRed, size: 35),
                         const SizedBox(width: 8),
@@ -250,6 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
+                    
                     const SizedBox(height: 40),
                     
                     // العناوين العلوية
@@ -262,19 +274,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       'أدخل تفاصيل حساب مُسعف الخاص بك.',
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 15, fontFamily: 'Cairo'),
                     ),
+                    
                     const SizedBox(height: 40),
-
+                    
                     // حقل البريد الإلكتروني
                     _buildInputLabel("البريد الإلكتروني"),
                     _buildCustomField(
                       controller: _emailController,
                       hint: "example@mail.com",
-                      isEmail: true, // تفعيل الاتجاه العربي للإيميل
+                      isEmail: true,
                       validator: (val) => (val == null || val.trim().isEmpty) ? 'هذا الحقل مطلوب ⚠️' : null,
                     ),
-
+                    
                     const SizedBox(height: 25),
-
+                    
                     // حقل كلمة المرور
                     _buildInputLabel("كلمة السر"),
                     _buildCustomField(
@@ -288,27 +301,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       validator: (val) => (val == null || val.trim().isEmpty) ? 'حقل كلمة المرور مطلوب ⚠️' : null,
                     ),
-
+                    
                     const SizedBox(height: 10),
-
-                    // زر نسيت كلمة المرور (على اليسار)
+                    
+                    // زر نسيت كلمة المرور
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton(
-                        onPressed: _showForgotPasswordDialog, 
+                        onPressed: _showForgotPasswordDialog,
                         style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                         child: const Text('نسيت كلمة المرور؟', style: TextStyle(color: Colors.grey, fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     
                     const SizedBox(height: 35),
-
+                    
                     // زر تسجيل الدخول
                     _isLoading
                         ? Center(child: CircularProgressIndicator(color: musafRed))
                         : SizedBox(
                             width: double.infinity,
-                            height: 55, // زر كبير وواضح
+                            height: 55,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: musafRed,
@@ -319,7 +332,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: const Text('تسجيل الدخول', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                             ),
                           ),
-
+                          
                     const SizedBox(height: 30),
                     
                     // رابط إنشاء الحساب السفلي
@@ -333,6 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
+                    
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -344,18 +358,18 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // دالة مساعدة لإنشاء العناوين (Labels)
+  // دالة مساعدة لإنشاء العناوين
   Widget _buildInputLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, right: 4.0),
       child: Text(
-        label, 
+        label,
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, fontFamily: 'Cairo', color: Colors.black87),
       ),
     );
   }
 
-  // دالة مساعدة لإنشاء الحقول بتصميم الـ Outline
+  // دالة مساعدة لإنشاء الحقول
   Widget _buildCustomField({
     required TextEditingController controller,
     required String hint,
@@ -368,31 +382,24 @@ class _LoginScreenState extends State<LoginScreen> {
     return TextFormField(
       controller: controller,
       obscureText: isPass,
-      // 🚀 إعدادات الاتجاه العربي للحقول
-      textAlign: TextAlign.right, // يبدأ الكتابة من اليمين
-      textDirection: isEmail ? TextDirection.ltr : null, // يحافظ على الحروف الإنجليزية صحيحة للإيميل
+      textAlign: TextAlign.right,
+      textDirection: isEmail ? TextDirection.ltr : null,
       validator: validator,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       style: const TextStyle(fontFamily: 'Cairo', fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.grey, fontSize: 14, fontFamily: 'Cairo'),
-        suffixIcon: suffixIcon, // أيقونة العين ستظهر على اليسار تلقائياً بسبب الـ Directionality RTL
+        suffixIcon: suffixIcon,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        
-        // تصميم الحواف العادية (غير مفعل)
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.grey.shade400, width: 1.0),
         ),
-        
-        // تصميم الحواف عند التركيز (مفعل) بلون التطبيق
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: musafRed, width: 2.0),
         ),
-        
-        // تصميم حواف الخطأ
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: Colors.red, width: 1.0),

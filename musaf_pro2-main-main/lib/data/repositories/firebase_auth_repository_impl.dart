@@ -7,69 +7,65 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../models/user_model.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class FirebaseAuthRepositoryImpl implements AuthRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  @override
-  Future<UserEntity?> findPatientByCaregiverEmail(String email) async {
-    try {
-      var querySnapshot = await _firestore
-          .collection('users')
-          .where('caregiverEmail', isEqualTo: email)
-          .where('role', isEqualTo: 'patient') 
-          .get(const GetOptions(source: Source.server));
+  // =========================
+  // USER SAVE
+  // =========================
+  
+@override
+Future<void> saveUserData(UserEntity user) async {
+  final model = UserModel(
+    uid: user.uid,
+    displayName: user.displayName,
+    phoneNumber: user.phoneNumber,
+    role: user.role,
+    email: user.email,
 
-      if (querySnapshot.docs.isEmpty) return null;
-      return UserModel.fromFirestore(querySnapshot.docs.first);
-    } catch (e) {
-      throw Exception("فشل في العثور على المريض عبر البريد: $e");
-    }
-  }
+    caregiverEmail: user.caregiverEmail,
+    relation: user.relation,
 
-  @override
-  Future<void> saveUserData(UserEntity user) async {
-    try {
-      final userModel = UserModel(
-        uid: user.uid,
-        displayName: user.displayName,
-        phoneNumber: user.phoneNumber,
-        role: user.role,
-        email: user.email,
-        caregiverEmail: user.caregiverEmail,
-        relation: user.relation,
-        pairingCode: user.pairingCode,
-        isCaregiverVerified: user.isCaregiverVerified,
-        linkedPatientId: user.linkedPatientId,
-        linkedPatientName: user.linkedPatientName,
-        patientVerificationCode: user.patientVerificationCode,
-        isEmailVerified: user.isEmailVerified,
+    linkedPatientId: user.linkedPatientId,
+    linkedPatientName: user.linkedPatientName,
+
+    caregiverId: user.caregiverId,
+    caregiverName: user.caregiverName,
+
+    pairingCode: user.pairingCode,
+
+    patientVerificationCode:
+        user.patientVerificationCode,
+
+    isLinked: user.isLinked,
+
+    isEmailVerified: user.isEmailVerified,
+  );
+
+  await _firestore
+      .collection('users')
+      .doc(user.uid)
+      .set(
+        model.toFirestore(),
+        SetOptions(merge: true),
       );
-      
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .set(userModel.toFirestore(), SetOptions(merge: true)); 
-    } catch (e) {
-      throw Exception("فشل في حفظ بيانات المستخدم: $e");
-    }
-  }
+}
 
+  // =========================
+  // GET USER
+  // =========================
   @override
   Future<UserEntity?> getUserData(String uid) async {
-    try {
-      var docSnapshot = await _firestore
-          .collection('users')
-          .doc(uid)
-          .get(); 
-
-      if (!docSnapshot.exists || docSnapshot.data() == null) return null;
-      return UserModel.fromFirestore(docSnapshot);
-    } catch (e) {
-      throw Exception("فشل في جلب بيانات المستخدم: $e");
-    }
+    final doc = await _firestore.collection('users').doc(uid).get();
+    if (!doc.exists) return null;
+    return UserModel.fromFirestore(doc);
   }
 
+  // =========================
+  // LINK CAREGIVER <-> PATIENT
+  // =========================
   @override
   Future<bool> linkCaregiverWithPatient({
     required String caregiverId,
@@ -77,7 +73,7 @@ class FirebaseAuthRepositoryImpl implements AuthRepository {
     required String pairingCode,
   }) async {
     try {
-      var patientQuery = await _firestore
+      final patientQuery = await _firestore
           .collection('users')
           .where('pairingCode', isEqualTo: pairingCode)
           .where('role', isEqualTo: 'patient')
@@ -85,138 +81,164 @@ class FirebaseAuthRepositoryImpl implements AuthRepository {
 
       if (patientQuery.docs.isEmpty) return false;
 
-      var patientDoc = patientQuery.docs.first;
-      String patientId = patientDoc.id;
-      String patientName = patientDoc.data()['displayName'] ?? 'مريض';
+      final patientDoc = patientQuery.docs.first;
+      final patientId = patientDoc.id;
+      final patientName = patientDoc['displayName'];
 
       final batch = _firestore.batch();
 
-      var caregiverRef = _firestore.collection('users').doc(caregiverId);
+      final caregiverRef = _firestore.collection('users').doc(caregiverId);
+      final patientRef = _firestore.collection('users').doc(patientId);
+
+      // 🟢 caregiver update
       batch.update(caregiverRef, {
         'linkedPatientId': patientId,
         'linkedPatientName': patientName,
-        'isCaregiverVerified': true,
+        'isLinked': true,
       });
 
-      var patientRef = _firestore.collection('users').doc(patientId);
+      // 🟢 patient update (IMPORTANT FIX)
       batch.update(patientRef, {
-        'isCaregiverVerified': true,
-        'pairingCode': FieldValue.delete(), 
+        'caregiverId': caregiverId,
+        'caregiverName': caregiverName,
+        'isLinked': true,
+        'pairingCode': FieldValue.delete(),
       });
 
-      // ✅ هنا نهاية الكود الخاص بفك الارتباط بشكل صحيح
+      // 🟢 ENSURE patients collection exists (CRITICAL FIX)
+      await _firestore.collection('patients').doc(patientId).set({
+        'patientId': patientId,
+        'caregiverId': caregiverId,
+        'lastSeen': FieldValue.serverTimestamp(),
+        'signalStatus': 'online',
+      }, SetOptions(merge: true));
+
       await batch.commit();
       return true;
     } catch (e) {
-      debugPrint("Error during pairing process: $e");
+      debugPrint("link error: $e");
       return false;
     }
   }
 
-  // =================================================================
-  // الدوال الجديدة (فك الارتباط، حذف الحساب، رفع الصورة)
-  // =================================================================
+// استدعاء هذه الدالة بعد تسجيل دخول المرافق بنجاح
+Future<void> saveCaregiverFCMToken(String caregiverId) async {
+  String? fcmToken = await FirebaseMessaging.instance.getToken();
+  
+  if (fcmToken != null) {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(caregiverId)
+        .update({'fcmToken': fcmToken});
+  }
+}
 
+  // =========================
+  // UNLINK (FIXED)
+  // =========================
   @override
-  Future<void> unlinkPatientLogic(String currentUserId, String patientId) async {
-    try {
-      await _firestore.runTransaction((transaction) async {
-        final caregiverRef = _firestore.collection('users').doc(currentUserId);
-        final patientRef = _firestore.collection('users').doc(patientId);
+  Future<void> unlinkPatientLogic(String userId, String patientId) async {
+    final batch = _firestore.batch();
 
-        final caregiverSnapshot = await transaction.get(caregiverRef);
-        final patientSnapshot = await transaction.get(patientRef);
+    batch.update(_firestore.collection('users').doc(userId), {
+      'linkedPatientId': FieldValue.delete(),
+      'linkedPatientName': FieldValue.delete(),
+      'isLinked': false,
+    });
 
-        if (!caregiverSnapshot.exists || !patientSnapshot.exists) {
-          throw Exception("عذراً، لم يتم العثور على بيانات المستخدم أو التابع.");
-        }
+    batch.update(_firestore.collection('users').doc(patientId), {
+      'caregiverId': FieldValue.delete(),
+      'caregiverName': FieldValue.delete(),
+      'isLinked': false,
+    });
 
-        transaction.update(caregiverRef, {
-          'linkedPatientId': FieldValue.delete(), 
-          'linkedPatientName': FieldValue.delete(),
-        });
+    await batch.commit();
+  }
 
-        transaction.update(patientRef, {
-          'caregiverEmail': FieldValue.delete(), 
-          'isCaregiverVerified': false, 
-        });
+  // =========================
+  // DELETE USER (FIXED SAFETY)
+  // =========================
+ @override
+  Future<void> deleteUserAccountSecurely(String password) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // 1. إعادة المصادقة (خطوة أمنية ضرورية)
+    final credential = EmailAuthProvider.credential(
+      email: user.email!,
+      password: password,
+    );
+    await user.reauthenticateWithCredential(credential);
+
+    // 2. جلب بيانات المستخدم لمعرفة إذا كان مرتبطاً بـ patientId
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    final data = doc.data();
+    final linkedPatientId = data?['linkedPatientId'];
+
+    // 3. فك الارتباط في مستند المريض (في مجموعة users)
+    if (linkedPatientId != null) {
+      await _firestore.collection('users').doc(linkedPatientId).update({
+        'caregiverId': FieldValue.delete(),
+        'caregiverName': FieldValue.delete(),
+        'isLinked': false,
       });
 
-      debugPrint("تم فك الارتباط بنجاح للطرفين.");
-    } catch (e) {
-      debugPrint("خطأ أثناء فك الارتباط: $e");
-      throw Exception("فشلت عملية فك الارتباط، يرجى المحاولة لاحقاً.");
+      // 🛑 الإضافة الهامة: حذف مستند المريض من مجموعة patients الخاصة بالتتبع
+      // لكي يتوقف تطبيق المريض عن إرسال التحديثات للمرافق المحذوف
+      await _firestore.collection('patients').doc(linkedPatientId).delete();
     }
+
+    // 4. حذف مستند المستخدم الحالي من الـ users
+    await _firestore.collection('users').doc(user.uid).delete();
+    
+    // 5. حذف حساب المستخدم من Firebase Auth
+    await user.delete();
   }
 
+  // =========================
+  // PROFILE IMAGE
+  // =========================
   @override
- Future<void> deleteUserAccountSecurely(String currentPassword) async {
+  Future<void> uploadProfileImage(String uid, String path) async {
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('profile_images')
+        .child('$uid.jpg');
+
+    await ref.putFile(File(path));
+
+    final url = await ref.getDownloadURL();
+
+    await _firestore.collection('users').doc(uid).update({
+      'profileImageUrl': url,
+    });
+  }
+  
+  
+  
+@override
+Future<UserEntity?> findPatientByCaregiverEmail(
+    String email) async {
   try {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user != null && user.email != null) {
-      
-      // 1. إعادة المصادقة (خطوة ضرورية جداً للحذف الأمني)
-      AuthCredential credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: currentPassword,
-      );
-      await user.reauthenticateWithCredential(credential);
+    final query = await _firestore
+        .collection('users')
+        .where('caregiverEmail',
+            isEqualTo: email.toLowerCase())
+        .where('role', isEqualTo: 'patient')
+        .limit(1)
+        .get();
 
-      // 2. 🚀 منطق التنظيف التلقائي (فك الارتباط قبل الحذف)
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
-      if (userDoc.exists) {
-        Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
-        
-        // إذا كان المستخدم مرافقاً ومرتبطاً بمريض
-        String? linkedPatientId = userData?['linkedPatientId'];
-        if (linkedPatientId != null && linkedPatientId.isNotEmpty) {
-          // فك الارتباط من طرف المريض (حذف معرف المرافق من بيانات المريض)
-          await _firestore.collection('users').doc(linkedPatientId).update({
-            'linkedPatientId': FieldValue.delete(), 
-            // إذا كان لديك حقول أخرى مثل 'caregiverEmail' يجب حذفها أيضاً
-          });
-        }
-      }
+    if (query.docs.isEmpty) {
+      return null;
+    }
 
-      // 3. حذف بيانات المستخدم من Firestore
-      await _firestore.collection('users').doc(user.uid).delete();
-      
-      // 4. حذف الحساب نهائياً من Firebase Auth
-      await user.delete();
-    }
-  } on FirebaseAuthException catch (e) {
-    if (e.code == 'wrong-password') {
-      throw Exception("كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى.");
-    } else if (e.code == 'network-request-failed') {
-      throw Exception("تأكد من اتصالك بالإنترنت.");
-    } else {
-      throw Exception("حدث خطأ أثناء المصادقة: ${e.message}");
-    }
+    return UserModel.fromFirestore(
+      query.docs.first,
+    );
   } catch (e) {
-    throw Exception("حدث خطأ غير متوقع أثناء الحذف.");
+    debugPrint(
+      'findPatientByCaregiverEmail error: $e',
+    );
+    return null;
   }
-}
-  @override
-  Future<void> uploadProfileImage(String currentUserId, String imagePath) async {
-    try {
-      String uniqueFileName = '${currentUserId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('profile_images')
-          .child(uniqueFileName); 
-
-      await storageRef.putFile(File(imagePath));
-      
-      final downloadUrl = await storageRef.getDownloadURL();
-      await _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .update({'profileImageUrl': downloadUrl});
-          
-    } catch (e) {
-      debugPrint("خطأ أثناء رفع الصورة: $e");
-      throw Exception("فشل رفع الصورة.");
-    }
-  }
-}
+}  }
